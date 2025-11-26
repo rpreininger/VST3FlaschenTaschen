@@ -1,0 +1,53 @@
+# Build directories
+**/build/
+out/
+cmake-build-*/
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.suo
+*.user
+*.sln.docstates
+x64/
+Debug/
+Release/
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Compiled binaries
+*.exe
+*.dll
+*.lib
+*.exp
+*.ilk
+*.pdb
+*.obj
+*.o
+*.a
+
+# VST3 plugin output
+*.vst3/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Generated resource files
+/FlaschenTaschen/resource/

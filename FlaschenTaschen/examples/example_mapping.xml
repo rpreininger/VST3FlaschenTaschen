@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    FlaschenTaschen VST Plugin - Example Mapping Configuration
+
+    This file maps MIDI notes to syllables for display on the LED matrix
+    and text-to-speech synthesis.
+
+    Structure:
+    - Global: Server connection settings and display configuration
+    - Syllables: Define the syllables with unique IDs
+    - Notes: Map MIDI note numbers to syllable IDs
+-->
+<Mapping>
+    <Global>
+        <!-- FlaschenTaschen Server Configuration -->
+        <Server ip="192.168.1.100" port="1337"/>
+
+        <!-- LED Matrix Display Configuration -->
+        <Display
+            width="45"
+            height="35"
+            offsetX="0"
+            offsetY="0"
+            layer="1"
+            colorR="255"
+            colorG="255"
+            colorB="255"
+            bgColorR="0"
+            bgColorG="0"
+            bgColorB="0"
+        />
+    </Global>
+
+    <!-- Syllable Definitions -->
+    <Syllables>
+        <!-- Japanese-style syllables (example) -->
+        <S id="0" text="ka"/>
+        <S id="1" text="ki"/>
+        <S id="2" text="ku"/>
+        <S id="3" text="ke"/>
+        <S id="4" text="ko"/>
+
+        <S id="5" text="sa"/>
+        <S id="6" text="shi"/>
+        <S id="7" text="su"/>
+        <S id="8" text="se"/>
+        <S id="9" text="so"/>
+
+        <S id="10" text="ta"/>
+        <S id="11" text="chi"/>
+        <S id="12" text="tsu"/>
+        <S id="13" text="te"/>
+        <S id="14" text="to"/>
+
+        <S id="15" text="na"/>
+        <S id="16" text="ni"/>
+        <S id="17" text="nu"/>
+        <S id="18" text="ne"/>
+        <S id="19" text="no"/>
+
+        <S id="20" text="ha"/>
+        <S id="21" text="hi"/>
+        <S id="22" text="fu"/>
+        <S id="23" text="he"/>
+        <S id="24" text="ho"/>
+
+        <!-- Words/Phrases -->
+        <S id="50" text="Hello"/>
+        <S id="51" text="World"/>
+        <S id="52" text="Music"/>
+        <S id="53" text="Light"/>
+        <S id="54" text="Dance"/>
+    </Syllables>
+
+    <!-- MIDI Note to Syllable Mappings -->
+    <!-- MIDI Note 60 = Middle C (C4) -->
+    <Notes>
+        <!-- Octave starting at C4 (MIDI 60) - ka row -->
+        <Note midi="60" syllable_id="0"/>   <!-- C4 -> ka -->
+        <Note midi="61" syllable_id="1"/>   <!-- C#4 -> ki -->
+        <Note midi="62" syllable_id="2"/>   <!-- D4 -> ku -->
+        <Note midi="63" syllable_id="3"/>   <!-- D#4 -> ke -->
+        <Note midi="64" syllable_id="4"/>   <!-- E4 -> ko -->
+
+        <!-- sa row -->
+        <Note midi="65" syllable_id="5"/>   <!-- F4 -> sa -->
+        <Note midi="66" syllable_id="6"/>   <!-- F#4 -> shi -->
+        <Note midi="67" syllable_id="7"/>   <!-- G4 -> su -->
+        <Note midi="68" syllable_id="8"/>   <!-- G#4 -> se -->
+        <Note midi="69" syllable_id="9"/>   <!-- A4 -> so -->
+
+        <!-- ta row -->
+        <Note midi="70" syllable_id="10"/>  <!-- A#4 -> ta -->
+        <Note midi="71" syllable_id="11"/>  <!-- B4 -> chi -->
+
+        <!-- Octave starting at C5 (MIDI 72) -->
+        <Note midi="72" syllable_id="12"/>  <!-- C5 -> tsu -->
+        <Note midi="73" syllable_id="13"/>  <!-- C#5 -> te -->
+        <Note midi="74" syllable_id="14"/>  <!-- D5 -> to -->
+
+        <!-- na row -->
+        <Note midi="75" syllable_id="15"/>  <!-- D#5 -> na -->
+        <Note midi="76" syllable_id="16"/>  <!-- E5 -> ni -->
+        <Note midi="77" syllable_id="17"/>  <!-- F5 -> nu -->
+        <Note midi="78" syllable_id="18"/>  <!-- F#5 -> ne -->
+        <Note midi="79" syllable_id="19"/>  <!-- G5 -> no -->
+
+        <!-- ha row -->
+        <Note midi="80" syllable_id="20"/>  <!-- G#5 -> ha -->
+        <Note midi="81" syllable_id="21"/>  <!-- A5 -> hi -->
+        <Note midi="82" syllable_id="22"/>  <!-- A#5 -> fu -->
+        <Note midi="83" syllable_id="23"/>  <!-- B5 -> he -->
+
+        <!-- Octave starting at C6 (MIDI 84) -->
+        <Note midi="84" syllable_id="24"/>  <!-- C6 -> ho -->
+
+        <!-- Lower octave for words (MIDI 48-52 = C3 area) -->
+        <Note midi="48" syllable_id="50"/>  <!-- C3 -> Hello -->
+        <Note midi="49" syllable_id="51"/>  <!-- C#3 -> World -->
+        <Note midi="50" syllable_id="52"/>  <!-- D3 -> Music -->
+        <Note midi="51" syllable_id="53"/>  <!-- D#3 -> Light -->
+        <Note midi="52" syllable_id="54"/>  <!-- E3 -> Dance -->
+    </Notes>
+</Mapping>

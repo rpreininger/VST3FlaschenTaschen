@@ -2,178 +2,495 @@
 // Copyright(c) 2024 Stratojets.
 //------------------------------------------------------------------------
 
+// Prevent Windows min/max macros from interfering with std::min/max
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "mypluginprocessor.h"
 #include "myplugincids.h"
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/vst/ivstprocesscontext.h"
+#include "pluginterfaces/vst/ivstevents.h"
+
+#include <fstream>
+#include <cstring>
+#include <algorithm>
+
+namespace {
+
+void logToFile(const std::string& message) {
+    std::ofstream logFile("FlaschenTaschenPlugin_log.txt", std::ios::app);
+    if (logFile.is_open()) {
+        logFile << message << std::endl;
+        logFile.close();
+    }
+}
+
+} // anonymous namespace
 
 using namespace Steinberg;
 
 namespace FlaschenTaschen {
+
 //------------------------------------------------------------------------
 // FlaschenTaschenProcessor
 //------------------------------------------------------------------------
-FlaschenTaschenProcessor::FlaschenTaschenProcessor ()
+FlaschenTaschenProcessor::FlaschenTaschenProcessor()
 {
-	//--- set the wanted controller for our processor
-	setControllerClass (kFlaschenTaschenControllerUID);
+    setControllerClass(kFlaschenTaschenControllerUID);
 }
 
 //------------------------------------------------------------------------
-FlaschenTaschenProcessor::~FlaschenTaschenProcessor ()
-{}
-
-//------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::initialize (FUnknown* context)
+FlaschenTaschenProcessor::~FlaschenTaschenProcessor()
 {
-	// Here the Plug-in will be instantiated
-	
-	//---always initialize the parent-------
-	tresult result = AudioEffect::initialize (context);
-	// if everything Ok, continue
-	if (result != kResultOk)
-	{
-		return result;
-	}
-
-	//--- create Audio IO ------
-	// addAudioInput (STR16 ("Stereo In"), Steinberg::Vst::SpeakerArr::kStereo);
-	addAudioOutput (STR16 ("Stereo Out"), Steinberg::Vst::SpeakerArr::kStereo);
-
-	/* If you don't need an event bus, you can remove the next line */
-	addEventInput (STR16 ("Event In"), 1);
-
-	return kResultOk;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::terminate ()
+tresult PLUGIN_API FlaschenTaschenProcessor::initialize(FUnknown* context)
 {
-	// Here the Plug-in will be de-instantiated, last possibility to remove some memory!
-	
-	//---do not forget to call parent ------
-	return AudioEffect::terminate ();
+    tresult result = AudioEffect::initialize(context);
+    if (result != kResultOk)
+    {
+        return result;
+    }
+
+    // Create stereo audio output for TTS
+    addAudioOutput(STR16("Stereo Out"), Steinberg::Vst::SpeakerArr::kStereo);
+
+    // Add MIDI event input
+    addEventInput(STR16("Event In"), 1);
+
+    // Initialize FlaschenTaschen client
+    ftClient_ = std::make_unique<FlaschenTaschenClient>();
+
+    // Initialize TTS synthesizer
+    tts_ = std::make_unique<ESpeakSynthesizer>();
+
+    logToFile("FlaschenTaschen plugin initialized");
+
+    return kResultOk;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::setActive (TBool state)
+tresult PLUGIN_API FlaschenTaschenProcessor::terminate()
 {
-	//--- called when the Plug-in is enable/disable (On/Off) -----
-	return AudioEffect::setActive (state);
+    // Disconnect from server
+    if (ftClient_) {
+        ftClient_->disconnect();
+        ftClient_.reset();
+    }
+
+    // Shutdown TTS
+    if (tts_) {
+        tts_->shutdown();
+        tts_.reset();
+    }
+
+    logToFile("FlaschenTaschen plugin terminated");
+
+    return AudioEffect::terminate();
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::process (Vst::ProcessData& data)
+tresult PLUGIN_API FlaschenTaschenProcessor::setActive(TBool state)
 {
-	//--- First : Read inputs parameter changes-----------
+    if (state)
+    {
+        // Activate: Connect to FlaschenTaschen server if config loaded
+        if (configLoaded_) {
+            std::lock_guard<std::mutex> lock(configMutex_);
+            const auto& server = config_.getServerConfig();
+            const auto& display = config_.getDisplayConfig();
 
-	/*if (data.inputParameterChanges)
-	{
-		int32 numParamsChanged = data.inputParameterChanges->getParameterCount ();
-		for (int32 index = 0; index < numParamsChanged; index++)
-		{
-			if (auto* paramQueue = data.inputParameterChanges->getParameterData (index))
-			{
-				Vst::ParamValue value;
-				int32 sampleOffset;
-				int32 numPoints = paramQueue->getPointCount ();
-				switch (paramQueue->getParameterId ())
-				{
-				}
-			}
-		}
-	}*/
-	
-	//--- Here you have to implement your processing
+            ftClient_->setDisplaySize(display.width, display.height);
+            ftClient_->setOffset(display.offsetX, display.offsetY);
+            ftClient_->setLayer(display.layer);
 
-	if (data.numSamples > 0)
-	{
-		//--- ------------------------------------------
-		// here as example a default implementation where we try to copy the inputs to the outputs:
-		// if less input than outputs then clear outputs
-		//--- ------------------------------------------
-		
-		int32 minBus = std::min (data.numInputs, data.numOutputs);
-		for (int32 i = 0; i < minBus; i++)
-		{
-			int32 minChan = std::min (data.inputs[i].numChannels, data.outputs[i].numChannels);
-			for (int32 c = 0; c < minChan; c++)
-			{
-				// do not need to be copied if the buffers are the same
-				if (data.outputs[i].channelBuffers32[c] != data.inputs[i].channelBuffers32[c])
-				{
-					memcpy (data.outputs[i].channelBuffers32[c], data.inputs[i].channelBuffers32[c],
-							data.numSamples * sizeof (Vst::Sample32));
-				}
-			}
-			data.outputs[i].silenceFlags = data.inputs[i].silenceFlags;
-				
-			// clear the remaining output buffers
-			for (int32 c = minChan; c < data.outputs[i].numChannels; c++)
-			{
-				// clear output buffers
-				memset (data.outputs[i].channelBuffers32[c], 0,
-						data.numSamples * sizeof (Vst::Sample32));
+            if (ftClient_->connect(server.ip, server.port)) {
+                ftConnected_ = true;
+                logToFile("Connected to FlaschenTaschen server: " + server.ip + ":" + std::to_string(server.port));
 
-				// inform the host that this channel is silent
-				data.outputs[i].silenceFlags |= ((uint64)1 << c);
-			}
-		}
-		// clear the remaining output buffers
-		for (int32 i = minBus; i < data.numOutputs; i++)
-		{
-			// clear output buffers
-			for (int32 c = 0; c < data.outputs[i].numChannels; c++)
-			{
-				memset (data.outputs[i].channelBuffers32[c], 0,
-						data.numSamples * sizeof (Vst::Sample32));
-			}
-			// inform the host that this bus is silent
-			data.outputs[i].silenceFlags = ((uint64)1 << data.outputs[i].numChannels) - 1;
-		}
-	}
+                // Clear display
+                ftClient_->clear();
+                ftClient_->send();
+            } else {
+                logToFile("Failed to connect to FlaschenTaschen server: " + ftClient_->getLastError());
+            }
+        }
 
-	return kResultOk;
+        // Initialize TTS
+        if (tts_ && !tts_->isInitialized()) {
+            if (tts_->initialize(static_cast<int>(sampleRate_))) {
+                logToFile("TTS initialized at sample rate: " + std::to_string(sampleRate_));
+            } else {
+                logToFile("TTS initialization failed: " + tts_->getLastError());
+            }
+        }
+    }
+    else
+    {
+        // Deactivate: Disconnect
+        if (ftClient_) {
+            ftClient_->disconnect();
+            ftConnected_ = false;
+        }
+    }
+
+    return AudioEffect::setActive(state);
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::setupProcessing (Vst::ProcessSetup& newSetup)
+tresult PLUGIN_API FlaschenTaschenProcessor::process(Vst::ProcessData& data)
 {
-	//--- called before any processing ----
-	return AudioEffect::setupProcessing (newSetup);
+    // Process parameter changes
+    if (data.inputParameterChanges)
+    {
+        int32 numParamsChanged = data.inputParameterChanges->getParameterCount();
+        for (int32 index = 0; index < numParamsChanged; index++)
+        {
+            if (auto* paramQueue = data.inputParameterChanges->getParameterData(index))
+            {
+                Vst::ParamValue value;
+                int32 sampleOffset;
+                int32 numPoints = paramQueue->getPointCount();
+                if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                {
+                    switch (paramQueue->getParameterId())
+                    {
+                        case kParamFontScale:
+                            fontScale_ = static_cast<float>(value);
+                            font_.setScale(1 + static_cast<int>(value * 4)); // 1-5 scale
+                            break;
+                        case kParamColorR:
+                            colorR_ = static_cast<float>(value);
+                            break;
+                        case kParamColorG:
+                            colorG_ = static_cast<float>(value);
+                            break;
+                        case kParamColorB:
+                            colorB_ = static_cast<float>(value);
+                            break;
+                        case kParamTTSEnabled:
+                            ttsEnabled_ = value > 0.5;
+                            break;
+                        case kParamTTSRate:
+                            ttsRate_ = static_cast<float>(value);
+                            if (tts_ && tts_->isInitialized()) {
+                                tts_->setRate(80 + static_cast<int>(value * 370)); // 80-450
+                            }
+                            break;
+                        case kParamTTSPitch:
+                            ttsPitch_ = static_cast<float>(value);
+                            if (tts_ && tts_->isInitialized()) {
+                                tts_->setPitch(static_cast<int>(value * 99)); // 0-99
+                            }
+                            break;
+                        case kParamTTSVolume:
+                            ttsVolume_ = static_cast<float>(value);
+                            if (tts_ && tts_->isInitialized()) {
+                                tts_->setVolume(static_cast<int>(value * 200)); // 0-200
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Process MIDI events
+    if (data.inputEvents)
+    {
+        for (int32 i = 0; i < data.inputEvents->getEventCount(); i++)
+        {
+            Vst::Event event;
+            if (data.inputEvents->getEvent(i, event) == kResultOk)
+            {
+                switch (event.type)
+                {
+                    case Vst::Event::kNoteOnEvent:
+                        handleNoteOn(event.noteOn.pitch, static_cast<int>(event.noteOn.velocity * 127));
+                        break;
+
+                    case Vst::Event::kNoteOffEvent:
+                        handleNoteOff(event.noteOff.pitch);
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    // Process audio output (TTS)
+    if (data.numSamples > 0 && data.numOutputs > 0)
+    {
+        // Get output buffers
+        Vst::Sample32** outputs = data.outputs[0].channelBuffers32;
+        int numChannels = data.outputs[0].numChannels;
+
+        // Process TTS audio
+        processTTSAudio(outputs, numChannels, data.numSamples);
+    }
+
+    return kResultOk;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::canProcessSampleSize (int32 symbolicSampleSize)
+void FlaschenTaschenProcessor::handleNoteOn(int noteNumber, int velocity)
 {
-	// by default kSample32 is supported
-	if (symbolicSampleSize == Vst::kSample32)
-		return kResultTrue;
+    (void)velocity;
 
-	// disable the following comment if your processing support kSample64
-	/* if (symbolicSampleSize == Vst::kSample64)
-		return kResultTrue; */
+    if (!configLoaded_) {
+        return;
+    }
 
-	return kResultFalse;
+    std::string syllable;
+    {
+        std::lock_guard<std::mutex> lock(configMutex_);
+        syllable = config_.getSyllableForNote(noteNumber);
+    }
+
+    if (!syllable.empty()) {
+        currentNoteNumber_ = noteNumber;
+        currentSyllable_ = syllable;
+
+        logToFile("Note ON: " + std::to_string(noteNumber) + " -> syllable: " + syllable);
+
+        // Update LED display
+        updateDisplay(syllable);
+
+        // Speak syllable via TTS
+        if (ttsEnabled_) {
+            speakSyllable(syllable);
+        }
+    }
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::setState (IBStream* state)
+void FlaschenTaschenProcessor::handleNoteOff(int noteNumber)
 {
-	// called when we load a preset, the model has to be reloaded
-	IBStreamer streamer (state, kLittleEndian);
-	
-	return kResultOk;
+    // Only clear if this is the currently displayed note
+    if (currentNoteNumber_ == noteNumber) {
+        currentNoteNumber_ = -1;
+        currentSyllable_.clear();
+
+        logToFile("Note OFF: " + std::to_string(noteNumber));
+
+        // Clear display (show nothing or keep last syllable based on preference)
+        // For now, we keep the last syllable displayed
+    }
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::getState (IBStream* state)
+void FlaschenTaschenProcessor::updateDisplay(const std::string& syllable)
 {
-	// here we need to save the model
-	IBStreamer streamer (state, kLittleEndian);
+    if (!ftConnected_ || !ftClient_) {
+        return;
+    }
 
-	return kResultOk;
+    // Get display config
+    const auto& display = config_.getDisplayConfig();
+
+    // Create color from parameters
+    Color textColor(
+        static_cast<uint8_t>(colorR_ * 255),
+        static_cast<uint8_t>(colorG_ * 255),
+        static_cast<uint8_t>(colorB_ * 255)
+    );
+    Color bgColor(display.bgColorR, display.bgColorG, display.bgColorB);
+
+    // Clear and render
+    ftClient_->clear(bgColor);
+    font_.renderTextCenteredFull(*ftClient_, syllable, textColor, bgColor);
+
+    // Send to server
+    if (!ftClient_->send()) {
+        logToFile("Failed to send frame: " + ftClient_->getLastError());
+    }
+}
+
+//------------------------------------------------------------------------
+void FlaschenTaschenProcessor::speakSyllable(const std::string& syllable)
+{
+    if (!tts_ || !tts_->isInitialized()) {
+        return;
+    }
+
+    // Stop any current speech
+    tts_->stop();
+
+    // Start speaking the new syllable
+    tts_->speak(syllable);
+}
+
+//------------------------------------------------------------------------
+void FlaschenTaschenProcessor::processTTSAudio(Vst::Sample32** outputs, int numChannels, int numSamples)
+{
+    if (!tts_) {
+        // Clear outputs
+        for (int c = 0; c < numChannels; ++c) {
+            std::memset(outputs[c], 0, numSamples * sizeof(Vst::Sample32));
+        }
+        return;
+    }
+
+    // Get available TTS samples
+    size_t available = tts_->getAvailableSamples();
+
+    if (available > 0) {
+        // Read mono TTS samples
+        size_t samplesToRead = std::min(available, static_cast<size_t>(numSamples));
+        std::vector<float> ttsBuffer(samplesToRead);
+        size_t read = tts_->readSamples(ttsBuffer.data(), samplesToRead);
+
+        // Copy to all output channels (mono to stereo)
+        for (int c = 0; c < numChannels; ++c) {
+            for (size_t i = 0; i < read; ++i) {
+                outputs[c][i] = ttsBuffer[i];
+            }
+            // Clear remaining samples
+            for (int i = static_cast<int>(read); i < numSamples; ++i) {
+                outputs[c][i] = 0.0f;
+            }
+        }
+    }
+    else {
+        // No TTS audio, clear outputs
+        for (int c = 0; c < numChannels; ++c) {
+            std::memset(outputs[c], 0, numSamples * sizeof(Vst::Sample32));
+        }
+    }
+}
+
+//------------------------------------------------------------------------
+bool FlaschenTaschenProcessor::loadMappingFile(const std::string& filePath)
+{
+    std::lock_guard<std::mutex> lock(configMutex_);
+
+    if (config_.loadFromFile(filePath)) {
+        configFilePath_ = filePath;
+        configLoaded_ = true;
+
+        logToFile("Loaded mapping file: " + filePath);
+        logToFile("  Server: " + config_.getServerConfig().ip + ":" + std::to_string(config_.getServerConfig().port));
+        logToFile("  Syllables: " + std::to_string(config_.getSyllables().size()));
+        logToFile("  Note mappings: " + std::to_string(config_.getNoteMappings().size()));
+
+        // Update font scale from display config
+        font_.setScale(1);
+
+        return true;
+    }
+    else {
+        logToFile("Failed to load mapping file: " + config_.getLastError());
+        return false;
+    }
+}
+
+//------------------------------------------------------------------------
+std::string FlaschenTaschenProcessor::getCurrentSyllable() const
+{
+    return currentSyllable_;
+}
+
+//------------------------------------------------------------------------
+tresult PLUGIN_API FlaschenTaschenProcessor::setupProcessing(Vst::ProcessSetup& newSetup)
+{
+    sampleRate_ = newSetup.sampleRate;
+
+    // Update TTS sample rate if already initialized
+    if (tts_ && tts_->isInitialized()) {
+        tts_->shutdown();
+        tts_->initialize(static_cast<int>(sampleRate_));
+    }
+
+    return AudioEffect::setupProcessing(newSetup);
+}
+
+//------------------------------------------------------------------------
+tresult PLUGIN_API FlaschenTaschenProcessor::canProcessSampleSize(int32 symbolicSampleSize)
+{
+    if (symbolicSampleSize == Vst::kSample32)
+        return kResultTrue;
+
+    return kResultFalse;
+}
+
+//------------------------------------------------------------------------
+tresult PLUGIN_API FlaschenTaschenProcessor::setState(IBStream* state)
+{
+    IBStreamer streamer(state, kLittleEndian);
+
+    // Read config file path
+    int32 pathLength = 0;
+    if (streamer.readInt32(pathLength) == false)
+        return kResultFalse;
+
+    if (pathLength > 0) {
+        std::vector<char> pathBuffer(pathLength + 1, 0);
+        if (streamer.readRaw(pathBuffer.data(), pathLength) == false)
+            return kResultFalse;
+
+        std::string filePath(pathBuffer.data());
+        loadMappingFile(filePath);
+    }
+
+    // Read parameters
+    float fontScale, r, g, b;
+    int32 ttsEnabled;
+    float ttsRate, ttsPitch, ttsVolume;
+
+    if (streamer.readFloat(fontScale) == false) return kResultOk; // Old state without these
+    fontScale_ = fontScale;
+    font_.setScale(1 + static_cast<int>(fontScale * 4));
+
+    if (streamer.readFloat(r) == false) return kResultOk;
+    if (streamer.readFloat(g) == false) return kResultOk;
+    if (streamer.readFloat(b) == false) return kResultOk;
+    colorR_ = r;
+    colorG_ = g;
+    colorB_ = b;
+
+    if (streamer.readInt32(ttsEnabled) == false) return kResultOk;
+    ttsEnabled_ = ttsEnabled != 0;
+
+    if (streamer.readFloat(ttsRate) == false) return kResultOk;
+    if (streamer.readFloat(ttsPitch) == false) return kResultOk;
+    if (streamer.readFloat(ttsVolume) == false) return kResultOk;
+    ttsRate_ = ttsRate;
+    ttsPitch_ = ttsPitch;
+    ttsVolume_ = ttsVolume;
+
+    return kResultOk;
+}
+
+//------------------------------------------------------------------------
+tresult PLUGIN_API FlaschenTaschenProcessor::getState(IBStream* state)
+{
+    IBStreamer streamer(state, kLittleEndian);
+
+    // Write config file path
+    int32 pathLength = static_cast<int32>(configFilePath_.length());
+    streamer.writeInt32(pathLength);
+    if (pathLength > 0) {
+        streamer.writeRaw(configFilePath_.c_str(), pathLength);
+    }
+
+    // Write parameters
+    streamer.writeFloat(fontScale_.load());
+    streamer.writeFloat(colorR_.load());
+    streamer.writeFloat(colorG_.load());
+    streamer.writeFloat(colorB_.load());
+    streamer.writeInt32(ttsEnabled_ ? 1 : 0);
+    streamer.writeFloat(ttsRate_.load());
+    streamer.writeFloat(ttsPitch_.load());
+    streamer.writeFloat(ttsVolume_.load());
+
+    return kResultOk;
 }
 
 //------------------------------------------------------------------------
