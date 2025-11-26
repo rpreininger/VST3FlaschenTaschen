@@ -27,6 +27,7 @@ FlaschenTaschen/
 │   ├── deps/
 │   │   ├── espeak-ng/          # eSpeak-NG header (local copy)
 │   │   └── world/              # World vocoder library
+│   ├── keyboard_mapping.xml    # Default syllable mapping
 │   └── CMakeLists.txt
 └── .gitignore
 ```
@@ -145,12 +146,30 @@ Output: `build/Release/FlaschenTaschenTest.exe`
 
 ### Run Standalone
 ```bash
-FlaschenTaschenTest.exe keyboard_mapping.xml
+FlaschenTaschenTest.exe [optional_mapping.xml]
 ```
-- Keys A-Z → MIDI notes 60-85 (with pitch-shifted audio)
-- Keys 0-9 → MIDI notes 48-57
-- P → Toggle pitch shifting ON/OFF
-- ESC to quit
+
+#### Default Mapping (no argument needed)
+Home row keys play C major scale with "the strato jets are the next hot shit":
+
+| Key | Word | Note |
+|-----|------|------|
+| A | the | C2 |
+| S | strato | D2 |
+| D | jets | E2 |
+| F | are | F2 |
+| G | the | G2 |
+| H | next | A2 |
+| J | hot | B2 |
+| K | shit | C3 |
+
+#### Controls
+- **A,S,D,F,G,H,J,K** → C major scale (C2-C3 default)
+- **W / +** → Octave UP
+- **Q / -** → Octave DOWN
+- **P** → Toggle pitch shifting ON/OFF
+- **T** → Test tone (440 Hz)
+- **ESC** → Quit
 
 ## Known Issues / TODO
 
