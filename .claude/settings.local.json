@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd.exe /c \"cd /d D:\\Developer\\C++\\VSTPlugins\\FlaschenTaschen\\Standalone && cmake --build build --config Release\")",
+      "Bash(powershell.exe -Command \"cd ''D:\\Developer\\C++\\VSTPlugins\\FlaschenTaschen\\Standalone''; cmake --build build --config Release\")",
+      "Bash(powershell.exe -Command \"& ''C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1'' -SkipAutomaticLocation; cd ''D:\\Developer\\C++\\VSTPlugins\\FlaschenTaschen\\Standalone''; cmake --build build --config Release\")",
+      "Bash(powershell.exe -Command \"Stop-Process -Name FlaschenTaschenTest -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; & ''C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1'' -SkipAutomaticLocation; cd ''D:\\Developer\\C++\\VSTPlugins\\FlaschenTaschen\\Standalone''; cmake --build build --config Release\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd time-independent pitch shifting with World vocoder\n\n- Implement proper World vocoder analysis/synthesis pipeline:\n  - DIO for F0 extraction\n  - CheapTrick for spectral envelope\n  - D4C for aperiodicity\n  - Modify F0 while keeping same frame count for constant duration\n- Add octave shift controls (W/+ up, Q/- down)\n- Simplify keyboard mapping to home row (A,S,D,F,G,H,J,K = C major scale)\n- Extend pitch shift range to ±36 semitones (3 octaves)\n- Add default keyboard_mapping.xml for C2-C3 scale\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nUpdate default syllables to \"the strato jets are the next hot shit\"\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -270,14 +270,14 @@ int main(int argc, char* argv[]) {
                     <TTS voice="en" rate="175" pitch="50" volume="100"/>
                 </Global>
                 <Syllables>
-                    <S id="0" text="C"/>
-                    <S id="1" text="D"/>
-                    <S id="2" text="E"/>
-                    <S id="3" text="F"/>
-                    <S id="4" text="G"/>
-                    <S id="5" text="A"/>
-                    <S id="6" text="H"/>
-                    <S id="7" text="C"/>
+                    <S id="0" text="the"/>
+                    <S id="1" text="strato"/>
+                    <S id="2" text="jets"/>
+                    <S id="3" text="are"/>
+                    <S id="4" text="the"/>
+                    <S id="5" text="next"/>
+                    <S id="6" text="hot"/>
+                    <S id="7" text="shit"/>
                 </Syllables>
                 <Notes>
                     <Note midi="36" syllable_id="0"/>
@@ -292,7 +292,7 @@ int main(int argc, char* argv[]) {
             </Mapping>
         )";
         g_config.loadFromString(testXml);
-        std::cout << "    Default config: C major scale (C2-C3) on home row A,S,D,F,G,H,J,K\n";
+        std::cout << "    Default: the strato jets are the next hot shit\n";
     }
 
     // Connect to FlaschenTaschen server
