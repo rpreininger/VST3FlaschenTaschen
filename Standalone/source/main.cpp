@@ -31,6 +31,8 @@
 #include "../../FlaschenTaschen/source/BitmapFont.cpp"
 #include "../../FlaschenTaschen/source/ESpeakSynthesizer.h"
 #include "../../FlaschenTaschen/source/ESpeakSynthesizer.cpp"
+#include "../../FlaschenTaschen/source/WorldPitchShifter.h"
+#include "../../FlaschenTaschen/source/WorldPitchShifter.cpp"
 
 using namespace FlaschenTaschen;
 
@@ -45,6 +47,8 @@ MappingConfig g_config;
 FlaschenTaschenClient g_ftClient;
 BitmapFont g_font;
 ESpeakSynthesizer g_tts;
+WorldPitchShifter g_pitchShifter;
+bool g_pitchShiftEnabled = true;  // Enable/disable pitch shifting
 
 // Current display state
 std::string g_currentSyllable;
@@ -104,7 +108,7 @@ void triggerNote(int midiNote) {
         }
     }
 
-    // Speak via TTS
+    // Speak via TTS with pitch shifting
     if (g_tts.isInitialized()) {
         // Get TTS audio synchronously
         g_tts.speak(syllable);
@@ -112,6 +116,13 @@ void triggerNote(int midiNote) {
         // Copy generated audio to playback buffer
         auto samples = g_tts.getAudioSamples();
         if (!samples.empty()) {
+            // Apply pitch shifting based on MIDI note
+            if (g_pitchShiftEnabled) {
+                double targetFreq = WorldPitchShifter::midiNoteToFrequency(midiNote);
+                samples = g_pitchShifter.processToFrequency(samples, targetFreq);
+                std::cout << "    -> Pitch shifted to " << targetFreq << " Hz (MIDI " << midiNote << ")" << std::endl;
+            }
+
             std::lock_guard<std::mutex> lock(g_ttsBufferMutex);
             g_ttsAudioBuffer.insert(g_ttsAudioBuffer.end(), samples.begin(), samples.end());
             std::cout << "    -> TTS generated " << samples.size() << " samples" << std::endl;
@@ -157,11 +168,13 @@ void printUsage() {
     std::cout << "\n";
     std::cout << "========================================\n";
     std::cout << "  FlaschenTaschen Standalone Test\n";
+    std::cout << "  with World Vocoder Pitch Shifting\n";
     std::cout << "========================================\n";
     std::cout << "\n";
     std::cout << "Keyboard Controls:\n";
     std::cout << "  A-Z  -> MIDI notes 60-85 (C4 - C#6)\n";
     std::cout << "  0-9  -> MIDI notes 48-57 (C3 - A3)\n";
+    std::cout << "  P    -> Toggle pitch shifting ON/OFF\n";
     std::cout << "  ESC  -> Quit\n";
     std::cout << "\n";
 }
@@ -281,8 +294,14 @@ int main(int argc, char* argv[]) {
         std::cout << "    (Speech synthesis disabled)\n";
     }
 
+    // Initialize World vocoder for pitch shifting
+    std::cout << "\n[5] Initializing World vocoder...\n";
+    g_pitchShifter.initialize(audio.getSampleRate());
+    std::cout << "    OK - Pitch shifter ready at " << audio.getSampleRate() << " Hz\n";
+    std::cout << "    Press 'P' to toggle pitch shifting (currently ON)\n";
+
     // Start audio
-    std::cout << "\n[5] Starting audio playback...\n";
+    std::cout << "\n[6] Starting audio playback...\n";
     if (audio.isRunning() || audio.start(audioCallback)) {
         std::cout << "    OK - Audio running\n";
     }
@@ -317,6 +336,13 @@ int main(int argc, char* argv[]) {
             // Check for special keys (arrows, function keys start with 0 or 224)
             if (key == 0 || key == 224) {
                 _getch();  // Consume the second byte
+                continue;
+            }
+
+            // Toggle pitch shifting with 'P'
+            if (key == 'p' || key == 'P') {
+                g_pitchShiftEnabled = !g_pitchShiftEnabled;
+                std::cout << "  Pitch shifting: " << (g_pitchShiftEnabled ? "ON" : "OFF") << std::endl;
                 continue;
             }
 

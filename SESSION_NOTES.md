@@ -14,6 +14,7 @@ FlaschenTaschen/
 │   │   ├── FlaschenTaschenClient.*  # UDP client for LED matrix
 │   │   ├── BitmapFont.*         # 5x7 pixel font renderer
 │   │   ├── ESpeakSynthesizer.*  # eSpeak-NG TTS (dynamic loading)
+│   │   ├── WorldPitchShifter.*  # World vocoder pitch shifting
 │   │   ├── mypluginprocessor.*  # VST3 audio/MIDI processor
 │   │   └── myplugincontroller.* # VST3 UI controller
 │   ├── examples/
@@ -23,8 +24,9 @@ FlaschenTaschen/
 │   ├── source/
 │   │   ├── main.cpp            # Console app with keyboard input
 │   │   └── WasapiAudio.*       # WASAPI audio output
-│   ├── deps/espeak-ng/
-│   │   └── speak_lib.h         # eSpeak-NG header (local copy)
+│   ├── deps/
+│   │   ├── espeak-ng/          # eSpeak-NG header (local copy)
+│   │   └── world/              # World vocoder library
 │   └── CMakeLists.txt
 └── .gitignore
 ```
@@ -57,6 +59,14 @@ eSpeak-NG text-to-speech wrapper:
 - No link-time dependency on eSpeak-NG
 - Works if eSpeak-NG is installed at runtime
 - Configurable voice, rate, pitch, volume
+
+### 5. WorldPitchShifter
+World vocoder for pitch-accurate voice synthesis:
+- **MIDI note to frequency mapping** - each key plays at correct pitch
+- Preserves formants (voice quality) during pitch shift
+- Uses DIO (F0 extraction), CheapTrick (spectral envelope), D4C (aperiodicity)
+- Real-time synthesis with modified pitch contour
+- GitHub: https://github.com/mmorise/World
 
 ## XML Configuration Format
 
@@ -136,8 +146,9 @@ Output: `build/Release/FlaschenTaschenTest.exe`
 ```bash
 FlaschenTaschenTest.exe keyboard_mapping.xml
 ```
-- Keys A-Z → MIDI notes 60-85
+- Keys A-Z → MIDI notes 60-85 (with pitch-shifted audio)
 - Keys 0-9 → MIDI notes 48-57
+- P → Toggle pitch shifting ON/OFF
 - ESC to quit
 
 ## Known Issues / TODO
@@ -151,6 +162,7 @@ FlaschenTaschenTest.exe keyboard_mapping.xml
 
 - **VST3 SDK**: Fetched via CMake FetchContent
 - **eSpeak-NG**: Optional runtime dependency (dynamic loading)
+- **World Vocoder**: Included in deps/world (BSD license)
 - **Windows APIs**: Winsock2 (UDP), WASAPI (audio), COM
 
 ## Repository

@@ -2,21 +2,33 @@ cmake_minimum_required(VERSION 3.14.0)
 
 project(FlaschenTaschenStandalone
     VERSION 1.0.0
-    DESCRIPTION "FlaschenTaschen Standalone Test Application"
+    DESCRIPTION "FlaschenTaschen Standalone Test Application with World Vocoder"
     LANGUAGES CXX
 )
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Option for eSpeak-NG support
-option(ENABLE_ESPEAK_NG "Enable eSpeak-NG Text-to-Speech support" OFF)
+# World vocoder source files
+set(WORLD_SOURCES
+    deps/world/src/cheaptrick.cpp
+    deps/world/src/common.cpp
+    deps/world/src/d4c.cpp
+    deps/world/src/dio.cpp
+    deps/world/src/fft.cpp
+    deps/world/src/harvest.cpp
+    deps/world/src/matlabfunctions.cpp
+    deps/world/src/stonemask.cpp
+    deps/world/src/synthesis.cpp
+    deps/world/src/synthesisrealtime.cpp
+)
 
 # Source files
 set(SOURCES
     source/main.cpp
     source/WasapiAudio.h
     source/WasapiAudio.cpp
+    ${WORLD_SOURCES}
 )
 
 # Create executable
@@ -26,6 +38,7 @@ add_executable(FlaschenTaschenTest ${SOURCES})
 target_include_directories(FlaschenTaschenTest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source
     ${CMAKE_CURRENT_SOURCE_DIR}/../FlaschenTaschen/source
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/world/src
 )
 
 # Windows-specific settings
@@ -49,9 +62,12 @@ if(WIN32)
     )
 endif()
 
-# eSpeak-NG Support - always enabled, uses dynamic loading (LoadLibrary)
+# eSpeak-NG Support - uses dynamic loading (LoadLibrary)
 # Will work if eSpeak-NG is installed at runtime
 message(STATUS "eSpeak-NG: using dynamic loading (will work if installed at runtime)")
+
+# World Vocoder
+message(STATUS "World Vocoder: enabled for pitch shifting")
 
 # Copy example XML to build directory
 configure_file(
@@ -62,4 +78,4 @@ configure_file(
 
 message(STATUS "FlaschenTaschen Standalone configured")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  eSpeak-NG: ${ENABLE_ESPEAK_NG}")
+message(STATUS "  World Vocoder: enabled")
