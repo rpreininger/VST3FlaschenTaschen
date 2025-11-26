@@ -50,6 +50,7 @@ BitmapFont g_font;
 ESpeakSynthesizer g_tts;
 WorldPitchShifter g_pitchShifter;
 bool g_pitchShiftEnabled = true;  // Enable/disable pitch shifting
+int g_octaveOffset = 0;           // Octave shift (-3 to +3)
 
 // Sample rate conversion
 int g_ttsSampleRate = 22050;  // eSpeak default
@@ -88,20 +89,27 @@ std::string g_currentSyllable;
 std::mutex g_displayMutex;
 
 //------------------------------------------------------------------------
-// Convert keyboard key to MIDI note
+// Convert keyboard key to MIDI note (base note for syllable lookup)
+// Home row (A,S,D,F,G,H,J,K) = C major scale C2-C3
 //------------------------------------------------------------------------
 int keyToMidiNote(int key) {
-    // Number keys 0-9 -> MIDI 48-57 (C3-A3)
-    if (key >= '0' && key <= '9') {
-        return 48 + (key - '0');
-    }
-    // Letter keys A-Z -> MIDI 60-85 (C4-C#6)
-    if (key >= 'A' && key <= 'Z') {
-        return 60 + (key - 'A');
-    }
+    // Convert to uppercase for easier handling
     if (key >= 'a' && key <= 'z') {
-        return 60 + (key - 'a');
+        key = key - 'a' + 'A';
     }
+
+    // Home row: C major scale C2-C3
+    switch (key) {
+        case 'A': return 36;  // C2
+        case 'S': return 38;  // D2
+        case 'D': return 40;  // E2
+        case 'F': return 41;  // F2
+        case 'G': return 43;  // G2
+        case 'H': return 45;  // A2
+        case 'J': return 47;  // B2 (H2 in German)
+        case 'K': return 48;  // C3
+    }
+
     return -1;
 }
 
@@ -149,11 +157,14 @@ void triggerNote(int midiNote) {
         // Copy generated audio to playback buffer
         auto samples = g_tts.getAudioSamples();
         if (!samples.empty()) {
-            // Apply pitch shifting based on MIDI note
+            // Apply pitch shifting based on MIDI note + octave offset
             if (g_pitchShiftEnabled) {
-                double targetFreq = WorldPitchShifter::midiNoteToFrequency(midiNote);
+                int pitchNote = midiNote + (g_octaveOffset * 12);
+                if (pitchNote < 0) pitchNote = 0;
+                if (pitchNote > 127) pitchNote = 127;
+                double targetFreq = WorldPitchShifter::midiNoteToFrequency(pitchNote);
                 samples = g_pitchShifter.processToFrequency(samples, targetFreq);
-                std::cout << "    -> Pitch shifted to " << targetFreq << " Hz (MIDI " << midiNote << ")" << std::endl;
+                std::cout << "    -> Pitch shifted to " << targetFreq << " Hz (MIDI " << pitchNote << ")" << std::endl;
             }
 
             // Resample from TTS rate to output rate
@@ -210,10 +221,13 @@ void printUsage() {
     std::cout << "  with World Vocoder Pitch Shifting\n";
     std::cout << "========================================\n";
     std::cout << "\n";
-    std::cout << "Keyboard Controls:\n";
-    std::cout << "  A-Z  -> MIDI notes 60-85 (C4 - C#6)\n";
-    std::cout << "  0-9  -> MIDI notes 48-57 (C3 - A3)\n";
+    std::cout << "Keyboard Controls (Home Row = C Major Scale):\n";
+    std::cout << "  A=C  S=D  D=E  F=F  G=G  H=A  J=B  K=C (default: C2-C3)\n";
+    std::cout << "\n";
+    std::cout << "  W/+  -> Octave UP\n";
+    std::cout << "  Q/-  -> Octave DOWN\n";
     std::cout << "  P    -> Toggle pitch shifting ON/OFF\n";
+    std::cout << "  T    -> Test tone (440 Hz)\n";
     std::cout << "  ESC  -> Quit\n";
     std::cout << "\n";
 }
@@ -247,37 +261,38 @@ int main(int argc, char* argv[]) {
         std::cout << "    FAILED: " << g_config.getLastError() << "\n";
         std::cout << "    Using built-in test configuration...\n";
 
-        // Create a simple test config
+        // Create default config: C major scale C2-C3 on home row keys
         std::string testXml = R"(
             <Mapping>
                 <Global>
                     <Server ip="127.0.0.1" port="1337"/>
                     <Display width="45" height="35" colorR="255" colorG="255" colorB="0"/>
+                    <TTS voice="en" rate="175" pitch="50" volume="100"/>
                 </Global>
                 <Syllables>
-                    <S id="0" text="do"/>
-                    <S id="1" text="re"/>
-                    <S id="2" text="mi"/>
-                    <S id="3" text="fa"/>
-                    <S id="4" text="sol"/>
-                    <S id="5" text="la"/>
-                    <S id="6" text="si"/>
-                    <S id="7" text="DO"/>
+                    <S id="0" text="C"/>
+                    <S id="1" text="D"/>
+                    <S id="2" text="E"/>
+                    <S id="3" text="F"/>
+                    <S id="4" text="G"/>
+                    <S id="5" text="A"/>
+                    <S id="6" text="H"/>
+                    <S id="7" text="C"/>
                 </Syllables>
                 <Notes>
-                    <Note midi="60" syllable_id="0"/>
-                    <Note midi="62" syllable_id="1"/>
-                    <Note midi="64" syllable_id="2"/>
-                    <Note midi="65" syllable_id="3"/>
-                    <Note midi="67" syllable_id="4"/>
-                    <Note midi="69" syllable_id="5"/>
-                    <Note midi="71" syllable_id="6"/>
-                    <Note midi="72" syllable_id="7"/>
+                    <Note midi="36" syllable_id="0"/>
+                    <Note midi="38" syllable_id="1"/>
+                    <Note midi="40" syllable_id="2"/>
+                    <Note midi="41" syllable_id="3"/>
+                    <Note midi="43" syllable_id="4"/>
+                    <Note midi="45" syllable_id="5"/>
+                    <Note midi="47" syllable_id="6"/>
+                    <Note midi="48" syllable_id="7"/>
                 </Notes>
             </Mapping>
         )";
         g_config.loadFromString(testXml);
-        std::cout << "    Test config loaded: do-re-mi-fa-sol-la-si-DO on white keys\n";
+        std::cout << "    Default config: C major scale (C2-C3) on home row A,S,D,F,G,H,J,K\n";
     }
 
     // Connect to FlaschenTaschen server
@@ -386,6 +401,34 @@ int main(int argc, char* argv[]) {
             if (key == 'p' || key == 'P') {
                 g_pitchShiftEnabled = !g_pitchShiftEnabled;
                 std::cout << "  Pitch shifting: " << (g_pitchShiftEnabled ? "ON" : "OFF") << std::endl;
+                continue;
+            }
+
+            // Octave up with 'W' or '+'
+            if (key == 'w' || key == 'W' || key == '+') {
+                if (g_octaveOffset < 5) {
+                    g_octaveOffset++;
+                    int baseC = 36 + (g_octaveOffset * 12);  // C note at current octave
+                    int octaveNum = (baseC / 12) - 1;  // MIDI octave numbering
+                    std::cout << "  Octave UP -> C" << octaveNum << "-C" << (octaveNum + 1)
+                              << " (offset " << (g_octaveOffset >= 0 ? "+" : "") << g_octaveOffset << ")" << std::endl;
+                } else {
+                    std::cout << "  Octave: already at maximum" << std::endl;
+                }
+                continue;
+            }
+
+            // Octave down with 'Q' or '-'
+            if (key == 'q' || key == 'Q' || key == '-') {
+                if (g_octaveOffset > -3) {
+                    g_octaveOffset--;
+                    int baseC = 36 + (g_octaveOffset * 12);  // C note at current octave
+                    int octaveNum = (baseC / 12) - 1;  // MIDI octave numbering
+                    std::cout << "  Octave DOWN -> C" << octaveNum << "-C" << (octaveNum + 1)
+                              << " (offset " << (g_octaveOffset >= 0 ? "+" : "") << g_octaveOffset << ")" << std::endl;
+                } else {
+                    std::cout << "  Octave: already at minimum" << std::endl;
+                }
                 continue;
             }
 

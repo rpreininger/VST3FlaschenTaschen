@@ -63,9 +63,10 @@ eSpeak-NG text-to-speech wrapper:
 ### 5. WorldPitchShifter
 World vocoder for pitch-accurate voice synthesis:
 - **MIDI note to frequency mapping** - each key plays at correct pitch
+- **Time-independent pitch shifting** - duration stays constant regardless of pitch
 - Preserves formants (voice quality) during pitch shift
 - Uses DIO (F0 extraction), CheapTrick (spectral envelope), D4C (aperiodicity)
-- Real-time synthesis with modified pitch contour
+- Modifies F0 contour while keeping same frame count → same duration
 - GitHub: https://github.com/mmorise/World
 
 ## XML Configuration Format
@@ -154,9 +155,8 @@ FlaschenTaschenTest.exe keyboard_mapping.xml
 ## Known Issues / TODO
 
 1. **VST3 Plugin UI**: Basic parameter controls only, no custom VSTGUI editor yet
-2. **Sample Rate Mismatch**: eSpeak generates at 22050 Hz, WASAPI may use 48000 Hz - resampling not implemented
-3. **Async TTS**: Speech synthesis is synchronous, may cause audio glitches with rapid triggers
-4. **Linux/macOS**: Only Windows fully tested
+2. **Async TTS**: Speech synthesis is synchronous, may cause audio glitches with rapid triggers
+3. **Linux/macOS**: Only Windows fully tested
 
 ## Dependencies
 

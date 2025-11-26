@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Mapping>
+    <Global>
+        <Server ip="127.0.0.1" port="1337"/>
+        <Display width="45" height="35"
+                 colorR="255" colorG="255" colorB="0"
+                 bgColorR="0" bgColorG="0" bgColorB="0"/>
+        <TTS voice="en" rate="175" pitch="50" volume="100"/>
+    </Global>
+    <Syllables>
+        <!-- Chromatic scale C2-B2 -->
+        <S id="0" text="C"/>
+        <S id="1" text="C#"/>
+        <S id="2" text="D"/>
+        <S id="3" text="D#"/>
+        <S id="4" text="E"/>
+        <S id="5" text="F"/>
+        <S id="6" text="F#"/>
+        <S id="7" text="G"/>
+        <S id="8" text="G#"/>
+        <S id="9" text="A"/>
+        <S id="10" text="A#"/>
+        <S id="11" text="B"/>
+    </Syllables>
+    <Notes>
+        <!-- Keys A-L map to MIDI 36-47 (C2-B2) -->
+        <Note midi="36" syllable_id="0"/>   <!-- A -> C2 -->
+        <Note midi="37" syllable_id="1"/>   <!-- B -> C#2 -->
+        <Note midi="38" syllable_id="2"/>   <!-- C -> D2 -->
+        <Note midi="39" syllable_id="3"/>   <!-- D -> D#2 -->
+        <Note midi="40" syllable_id="4"/>   <!-- E -> E2 -->
+        <Note midi="41" syllable_id="5"/>   <!-- F -> F2 -->
+        <Note midi="42" syllable_id="6"/>   <!-- G -> F#2 -->
+        <Note midi="43" syllable_id="7"/>   <!-- H -> G2 -->
+        <Note midi="44" syllable_id="8"/>   <!-- I -> G#2 -->
+        <Note midi="45" syllable_id="9"/>   <!-- J -> A2 -->
+        <Note midi="46" syllable_id="10"/>  <!-- K -> A#2 -->
+        <Note midi="47" syllable_id="11"/>  <!-- L -> B2 -->
+    </Notes>
+</Mapping>
