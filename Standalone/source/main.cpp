@@ -19,6 +19,7 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <cmath>
 
 #include "WasapiAudio.h"
 
@@ -49,6 +50,38 @@ BitmapFont g_font;
 ESpeakSynthesizer g_tts;
 WorldPitchShifter g_pitchShifter;
 bool g_pitchShiftEnabled = true;  // Enable/disable pitch shifting
+
+// Sample rate conversion
+int g_ttsSampleRate = 22050;  // eSpeak default
+int g_outputSampleRate = 48000;  // Will be set from WASAPI
+
+// Simple linear resampler
+std::vector<float> resample(const std::vector<float>& input, int inputRate, int outputRate) {
+    if (inputRate == outputRate || input.empty()) {
+        return input;
+    }
+
+    double ratio = static_cast<double>(outputRate) / inputRate;
+    size_t outputSize = static_cast<size_t>(input.size() * ratio);
+    std::vector<float> output(outputSize);
+
+    for (size_t i = 0; i < outputSize; ++i) {
+        double srcPos = i / ratio;
+        size_t srcIndex = static_cast<size_t>(srcPos);
+        double frac = srcPos - srcIndex;
+
+        if (srcIndex + 1 < input.size()) {
+            // Linear interpolation
+            output[i] = static_cast<float>(input[srcIndex] * (1.0 - frac) + input[srcIndex + 1] * frac);
+        } else if (srcIndex < input.size()) {
+            output[i] = input[srcIndex];
+        } else {
+            output[i] = 0.0f;
+        }
+    }
+
+    return output;
+}
 
 // Current display state
 std::string g_currentSyllable;
@@ -121,6 +154,12 @@ void triggerNote(int midiNote) {
                 double targetFreq = WorldPitchShifter::midiNoteToFrequency(midiNote);
                 samples = g_pitchShifter.processToFrequency(samples, targetFreq);
                 std::cout << "    -> Pitch shifted to " << targetFreq << " Hz (MIDI " << midiNote << ")" << std::endl;
+            }
+
+            // Resample from TTS rate to output rate
+            if (g_ttsSampleRate != g_outputSampleRate) {
+                samples = resample(samples, g_ttsSampleRate, g_outputSampleRate);
+                std::cout << "    -> Resampled " << g_ttsSampleRate << " -> " << g_outputSampleRate << " Hz" << std::endl;
             }
 
             std::lock_guard<std::mutex> lock(g_ttsBufferMutex);
@@ -268,7 +307,8 @@ int main(int argc, char* argv[]) {
     std::cout << "\n[3] Initializing WASAPI audio...\n";
     WasapiAudio audio;
     if (audio.initialize()) {
-        std::cout << "    OK - " << audio.getSampleRate() << " Hz, "
+        g_outputSampleRate = audio.getSampleRate();
+        std::cout << "    OK - " << g_outputSampleRate << " Hz, "
                   << audio.getNumChannels() << " channels, "
                   << audio.getBufferFrames() << " buffer frames\n";
     }
@@ -277,11 +317,14 @@ int main(int argc, char* argv[]) {
         std::cout << "    (Audio will not play)\n";
     }
 
-    // Initialize eSpeak TTS
+    // Initialize eSpeak TTS (at 22050 Hz - eSpeak's native rate)
     std::cout << "\n[4] Initializing eSpeak-NG TTS...\n";
-    if (g_tts.initialize(audio.getSampleRate())) {
+    g_ttsSampleRate = 22050;  // eSpeak's default/preferred rate
+    if (g_tts.initialize(g_ttsSampleRate)) {
         const auto& tts = g_config.getTTSConfig();
-        std::cout << "    OK - TTS initialized at " << audio.getSampleRate() << " Hz\n";
+        g_ttsSampleRate = g_tts.getSampleRate();  // Get actual rate from eSpeak
+        std::cout << "    OK - TTS initialized at " << g_ttsSampleRate << " Hz\n";
+        std::cout << "    Output rate: " << g_outputSampleRate << " Hz (will resample)\n";
         g_tts.setVoice(tts.voice);
         g_tts.setRate(tts.rate);
         g_tts.setPitch(tts.pitch);
@@ -294,10 +337,10 @@ int main(int argc, char* argv[]) {
         std::cout << "    (Speech synthesis disabled)\n";
     }
 
-    // Initialize World vocoder for pitch shifting
+    // Initialize World vocoder for pitch shifting (at TTS sample rate)
     std::cout << "\n[5] Initializing World vocoder...\n";
-    g_pitchShifter.initialize(audio.getSampleRate());
-    std::cout << "    OK - Pitch shifter ready at " << audio.getSampleRate() << " Hz\n";
+    g_pitchShifter.initialize(g_ttsSampleRate);
+    std::cout << "    OK - Pitch shifter ready at " << g_ttsSampleRate << " Hz\n";
     std::cout << "    Press 'P' to toggle pitch shifting (currently ON)\n";
 
     // Start audio
@@ -343,6 +386,20 @@ int main(int argc, char* argv[]) {
             if (key == 'p' || key == 'P') {
                 g_pitchShiftEnabled = !g_pitchShiftEnabled;
                 std::cout << "  Pitch shifting: " << (g_pitchShiftEnabled ? "ON" : "OFF") << std::endl;
+                continue;
+            }
+
+            // Test tone with 'T'
+            if (key == 't' || key == 'T') {
+                std::cout << "  Playing test tone (440 Hz)..." << std::endl;
+                std::vector<float> testTone(g_outputSampleRate);  // 1 second
+                for (int i = 0; i < g_outputSampleRate; ++i) {
+                    testTone[i] = 0.3f * std::sin(2.0f * 3.14159f * 440.0f * i / g_outputSampleRate);
+                }
+                {
+                    std::lock_guard<std::mutex> lock(g_ttsBufferMutex);
+                    g_ttsAudioBuffer.insert(g_ttsAudioBuffer.end(), testTone.begin(), testTone.end());
+                }
                 continue;
             }
 
