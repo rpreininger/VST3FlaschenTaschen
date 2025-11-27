@@ -7,16 +7,27 @@
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <functional>
 #include <atomic>
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <string>
 
 namespace FlaschenTaschen {
 
 //------------------------------------------------------------------------
-// WasapiAudio - Simple WASAPI exclusive mode audio output
+// AudioDeviceInfo - Information about an audio device
+//------------------------------------------------------------------------
+struct AudioDeviceInfo {
+    std::string id;          // Device ID (for selection)
+    std::string name;        // Friendly name
+    bool isDefault = false;  // Is this the default device?
+};
+
+//------------------------------------------------------------------------
+// WasapiAudio - Simple WASAPI shared mode audio output
 //------------------------------------------------------------------------
 class WasapiAudio {
 public:
@@ -26,8 +37,15 @@ public:
     WasapiAudio();
     ~WasapiAudio();
 
-    // Initialize WASAPI (finds default output device)
+    // Enumerate available output devices
+    static std::vector<AudioDeviceInfo> enumerateDevices();
+
+    // Initialize WASAPI with default device
     bool initialize();
+
+    // Initialize WASAPI with specific device by ID (empty = default)
+    // bufferMs = requested buffer size in milliseconds (0 = use default 20ms)
+    bool initialize(const std::string& deviceId, int bufferMs = 0);
 
     // Start audio playback with callback
     bool start(AudioCallback callback);

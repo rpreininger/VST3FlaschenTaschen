@@ -159,6 +159,21 @@ bool MappingConfig::parseXml(const std::string& xmlContent) {
             ttsConfig_.pitch = getIntAttribute(ttsTags[0], "pitch", 50);
             ttsConfig_.volume = getIntAttribute(ttsTags[0], "volume", 100);
         }
+
+        // Parse Audio config if present
+        auto audioTags = findAllTags(globalSection, "Audio");
+        if (!audioTags.empty()) {
+            audioConfig_.deviceId = getAttribute(audioTags[0], "deviceId");
+            audioConfig_.deviceName = getAttribute(audioTags[0], "deviceName");
+            audioConfig_.bufferMs = getIntAttribute(audioTags[0], "bufferMs", 20);
+        }
+
+        // Parse MIDI config if present
+        auto midiTags = findAllTags(globalSection, "Midi");
+        if (!midiTags.empty()) {
+            midiConfig_.deviceId = getIntAttribute(midiTags[0], "deviceId", -1);
+            midiConfig_.deviceName = getAttribute(midiTags[0], "deviceName");
+        }
     }
 
     // Parse Syllables section

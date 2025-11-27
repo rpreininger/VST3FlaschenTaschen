@@ -65,6 +65,23 @@ struct TTSConfig {
 };
 
 //------------------------------------------------------------------------
+// AudioConfig - Audio device configuration
+//------------------------------------------------------------------------
+struct AudioConfig {
+    std::string deviceId;       // WASAPI device ID (empty = default)
+    std::string deviceName;     // Friendly name (for display only)
+    int bufferMs = 20;          // Buffer size in milliseconds (default 20ms)
+};
+
+//------------------------------------------------------------------------
+// MidiConfig - MIDI input configuration
+//------------------------------------------------------------------------
+struct MidiConfig {
+    int deviceId = -1;          // MIDI device ID (-1 = disabled)
+    std::string deviceName;     // Device name (for display only)
+};
+
+//------------------------------------------------------------------------
 // MappingConfig - complete configuration from XML
 //------------------------------------------------------------------------
 class MappingConfig {
@@ -82,6 +99,8 @@ public:
     const ServerConfig& getServerConfig() const { return serverConfig_; }
     const DisplayConfig& getDisplayConfig() const { return displayConfig_; }
     const TTSConfig& getTTSConfig() const { return ttsConfig_; }
+    const AudioConfig& getAudioConfig() const { return audioConfig_; }
+    const MidiConfig& getMidiConfig() const { return midiConfig_; }
     const std::vector<Syllable>& getSyllables() const { return syllables_; }
     const std::vector<NoteMapping>& getNoteMappings() const { return noteMappings_; }
 
@@ -105,6 +124,8 @@ private:
     ServerConfig serverConfig_;
     DisplayConfig displayConfig_;
     TTSConfig ttsConfig_;
+    AudioConfig audioConfig_;
+    MidiConfig midiConfig_;
     std::vector<Syllable> syllables_;
     std::vector<NoteMapping> noteMappings_;
     std::map<int, int> noteToSyllableMap_;  // MIDI note -> syllable ID

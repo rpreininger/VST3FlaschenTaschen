@@ -6,11 +6,33 @@
 #include <comdef.h>
 #include <cstring>
 #include <string>
+#include <locale>
+#include <codecvt>
 
 // Link required libraries
 #pragma comment(lib, "ole32.lib")
 
 namespace FlaschenTaschen {
+
+// Helper to convert wide string to UTF-8
+static std::string wideToUtf8(const wchar_t* wide) {
+    if (!wide) return "";
+    int len = WideCharToMultiByte(CP_UTF8, 0, wide, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return "";
+    std::string result(len - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wide, -1, &result[0], len, nullptr, nullptr);
+    return result;
+}
+
+// Helper to convert UTF-8 to wide string
+static std::wstring utf8ToWide(const std::string& utf8) {
+    if (utf8.empty()) return L"";
+    int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+    if (len <= 0) return L"";
+    std::wstring result(len - 1, 0);
+    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &result[0], len);
+    return result;
+}
 
 //------------------------------------------------------------------------
 WasapiAudio::WasapiAudio() {
@@ -47,7 +69,90 @@ WasapiAudio::~WasapiAudio() {
 }
 
 //------------------------------------------------------------------------
+std::vector<AudioDeviceInfo> WasapiAudio::enumerateDevices() {
+    std::vector<AudioDeviceInfo> devices;
+    HRESULT hr;
+
+    // Initialize COM
+    hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+        return devices;
+    }
+
+    IMMDeviceEnumerator* enumerator = nullptr;
+    hr = CoCreateInstance(
+        __uuidof(MMDeviceEnumerator),
+        nullptr,
+        CLSCTX_ALL,
+        __uuidof(IMMDeviceEnumerator),
+        (void**)&enumerator
+    );
+    if (FAILED(hr) || !enumerator) {
+        return devices;
+    }
+
+    // Get default device ID for comparison
+    std::wstring defaultDeviceId;
+    IMMDevice* defaultDevice = nullptr;
+    if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &defaultDevice))) {
+        LPWSTR deviceId = nullptr;
+        if (SUCCEEDED(defaultDevice->GetId(&deviceId))) {
+            defaultDeviceId = deviceId;
+            CoTaskMemFree(deviceId);
+        }
+        defaultDevice->Release();
+    }
+
+    // Enumerate all render devices
+    IMMDeviceCollection* collection = nullptr;
+    hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &collection);
+    if (SUCCEEDED(hr) && collection) {
+        UINT count = 0;
+        collection->GetCount(&count);
+
+        for (UINT i = 0; i < count; ++i) {
+            IMMDevice* device = nullptr;
+            if (SUCCEEDED(collection->Item(i, &device))) {
+                AudioDeviceInfo info;
+
+                // Get device ID
+                LPWSTR deviceId = nullptr;
+                if (SUCCEEDED(device->GetId(&deviceId))) {
+                    info.id = wideToUtf8(deviceId);
+                    info.isDefault = (deviceId == defaultDeviceId);
+                    CoTaskMemFree(deviceId);
+                }
+
+                // Get friendly name
+                IPropertyStore* props = nullptr;
+                if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &props))) {
+                    PROPVARIANT varName;
+                    PropVariantInit(&varName);
+                    if (SUCCEEDED(props->GetValue(PKEY_Device_FriendlyName, &varName))) {
+                        info.name = wideToUtf8(varName.pwszVal);
+                        PropVariantClear(&varName);
+                    }
+                    props->Release();
+                }
+
+                devices.push_back(info);
+                device->Release();
+            }
+        }
+        collection->Release();
+    }
+
+    enumerator->Release();
+    return devices;
+}
+
+//------------------------------------------------------------------------
 bool WasapiAudio::initialize() {
+    return initialize("", 0);  // Use default device and buffer
+}
+
+//------------------------------------------------------------------------
+bool WasapiAudio::initialize(const std::string& deviceId, int bufferMs) {
     HRESULT hr;
 
     // Initialize COM
@@ -70,11 +175,20 @@ bool WasapiAudio::initialize() {
         return false;
     }
 
-    // Get default audio endpoint
-    hr = deviceEnumerator_->GetDefaultAudioEndpoint(eRender, eConsole, &device_);
-    if (FAILED(hr)) {
-        lastError_ = "Failed to get default audio device";
-        return false;
+    // Get audio endpoint - either specific device or default
+    if (deviceId.empty()) {
+        hr = deviceEnumerator_->GetDefaultAudioEndpoint(eRender, eConsole, &device_);
+        if (FAILED(hr)) {
+            lastError_ = "Failed to get default audio device";
+            return false;
+        }
+    } else {
+        std::wstring wideId = utf8ToWide(deviceId);
+        hr = deviceEnumerator_->GetDevice(wideId.c_str(), &device_);
+        if (FAILED(hr)) {
+            lastError_ = "Failed to get audio device: " + deviceId;
+            return false;
+        }
     }
 
     // Activate audio client
@@ -100,8 +214,11 @@ bool WasapiAudio::initialize() {
     sampleRate_ = waveFormat_->nSamplesPerSec;
     numChannels_ = waveFormat_->nChannels;
 
-    // Request 20ms buffer
-    REFERENCE_TIME requestedDuration = 200000; // 20ms in 100ns units
+    // Calculate buffer duration (in 100ns units)
+    // Default to 20ms if not specified or invalid
+    if (bufferMs <= 0) bufferMs = 20;
+    if (bufferMs > 500) bufferMs = 500;  // Cap at 500ms
+    REFERENCE_TIME requestedDuration = bufferMs * 10000; // ms to 100ns units
 
     // Initialize audio client in shared mode (more compatible than exclusive)
     hr = audioClient_->Initialize(

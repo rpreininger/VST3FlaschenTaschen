@@ -7,6 +7,10 @@
 //   Keys A-Z map to MIDI notes 60-85 (C4-C#6)
 //   Keys 0-9 map to MIDI notes 48-57 (C3-A3)
 //   ESC to quit
+//
+// Command line:
+//   -l          List available audio and MIDI devices
+//   <file.xml>  Load configuration from XML file
 //------------------------------------------------------------------------
 
 #ifndef NOMINMAX
@@ -22,6 +26,7 @@
 #include <cmath>
 
 #include "WasapiAudio.h"
+#include "MidiInput.h"
 
 // Include shared sources from VST plugin
 #include "../../FlaschenTaschen/source/MappingConfig.h"
@@ -49,6 +54,7 @@ FlaschenTaschenClient g_ftClient;
 BitmapFont g_font;
 ESpeakSynthesizer g_tts;
 WorldPitchShifter g_pitchShifter;
+MidiInput g_midiInput;
 bool g_pitchShiftEnabled = true;  // Enable/disable pitch shifting
 int g_octaveOffset = 0;           // Octave shift (-3 to +3)
 
@@ -212,6 +218,44 @@ void audioCallback(float* buffer, int numFrames, int numChannels) {
 }
 
 //------------------------------------------------------------------------
+// List available devices
+//------------------------------------------------------------------------
+void listDevices() {
+    std::cout << "\n";
+    std::cout << "=== WASAPI Audio Output Devices ===\n";
+    auto audioDevices = WasapiAudio::enumerateDevices();
+    if (audioDevices.empty()) {
+        std::cout << "  (no devices found)\n";
+    } else {
+        for (size_t i = 0; i < audioDevices.size(); ++i) {
+            std::cout << "  [" << i << "] " << audioDevices[i].name;
+            if (audioDevices[i].isDefault) {
+                std::cout << " (default)";
+            }
+            std::cout << "\n";
+            std::cout << "      ID: " << audioDevices[i].id << "\n";
+        }
+    }
+
+    std::cout << "\n";
+    std::cout << "=== MIDI Input Devices ===\n";
+    auto midiDevices = MidiInput::enumerateDevices();
+    if (midiDevices.empty()) {
+        std::cout << "  (no devices found)\n";
+    } else {
+        for (const auto& dev : midiDevices) {
+            std::cout << "  [" << dev.id << "] " << dev.name << "\n";
+        }
+    }
+
+    std::cout << "\n";
+    std::cout << "To use a specific device, add to your XML config:\n";
+    std::cout << "  <Audio deviceId=\"...\" />\n";
+    std::cout << "  <Midi deviceId=\"0\" />\n";
+    std::cout << "\n";
+}
+
+//------------------------------------------------------------------------
 // Print usage
 //------------------------------------------------------------------------
 void printUsage() {
@@ -239,13 +283,29 @@ int main(int argc, char* argv[]) {
     std::cout << "FlaschenTaschen Standalone Test Application\n";
     std::cout << "============================================\n\n";
 
-    // Get XML file path from argument or use default
+    // Parse command line arguments
     std::string xmlPath;
-    if (argc > 1) {
-        xmlPath = argv[1];
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-l" || arg == "--list") {
+            listDevices();
+            return 0;
+        }
+        else if (arg == "-h" || arg == "--help") {
+            std::cout << "Usage: FlaschenTaschenTest [options] [config.xml]\n";
+            std::cout << "\nOptions:\n";
+            std::cout << "  -l, --list   List available audio and MIDI devices\n";
+            std::cout << "  -h, --help   Show this help message\n";
+            std::cout << "\nIf no XML file is specified, uses built-in defaults.\n";
+            return 0;
+        }
+        else if (arg[0] != '-') {
+            xmlPath = arg;
+        }
     }
-    else {
-        // Try default example path
+
+    // Use default path if not specified
+    if (xmlPath.empty()) {
         xmlPath = "../../FlaschenTaschen/examples/example_mapping.xml";
     }
 
@@ -321,7 +381,16 @@ int main(int argc, char* argv[]) {
     // Initialize WASAPI audio
     std::cout << "\n[3] Initializing WASAPI audio...\n";
     WasapiAudio audio;
-    if (audio.initialize()) {
+    const auto& audioConfig = g_config.getAudioConfig();
+    bool audioOk = false;
+    if (!audioConfig.deviceId.empty()) {
+        std::cout << "    Using device: " << audioConfig.deviceId << "\n";
+    }
+    if (audioConfig.bufferMs > 0) {
+        std::cout << "    Requested buffer: " << audioConfig.bufferMs << " ms\n";
+    }
+    audioOk = audio.initialize(audioConfig.deviceId, audioConfig.bufferMs);
+    if (audioOk) {
         g_outputSampleRate = audio.getSampleRate();
         std::cout << "    OK - " << g_outputSampleRate << " Hz, "
                   << audio.getNumChannels() << " channels, "
@@ -332,8 +401,30 @@ int main(int argc, char* argv[]) {
         std::cout << "    (Audio will not play)\n";
     }
 
+    // Initialize MIDI input if configured
+    std::cout << "\n[4] Initializing MIDI input...\n";
+    const auto& midiConfig = g_config.getMidiConfig();
+    if (midiConfig.deviceId >= 0) {
+        if (g_midiInput.open(midiConfig.deviceId)) {
+            std::cout << "    OK - " << g_midiInput.getDeviceName() << "\n";
+
+            // Set up MIDI note callback
+            g_midiInput.setNoteCallback([](int channel, int note, int velocity) {
+                (void)channel;
+                if (velocity > 0) {
+                    // Note On - trigger the syllable
+                    triggerNote(note);
+                }
+            });
+        } else {
+            std::cout << "    FAILED: " << g_midiInput.getLastError() << "\n";
+        }
+    } else {
+        std::cout << "    SKIPPED - No MIDI device configured (use -l to list devices)\n";
+    }
+
     // Initialize eSpeak TTS (at 22050 Hz - eSpeak's native rate)
-    std::cout << "\n[4] Initializing eSpeak-NG TTS...\n";
+    std::cout << "\n[5] Initializing eSpeak-NG TTS...\n";
     g_ttsSampleRate = 22050;  // eSpeak's default/preferred rate
     if (g_tts.initialize(g_ttsSampleRate)) {
         const auto& tts = g_config.getTTSConfig();
@@ -353,13 +444,13 @@ int main(int argc, char* argv[]) {
     }
 
     // Initialize World vocoder for pitch shifting (at TTS sample rate)
-    std::cout << "\n[5] Initializing World vocoder...\n";
+    std::cout << "\n[6] Initializing World vocoder...\n";
     g_pitchShifter.initialize(g_ttsSampleRate);
     std::cout << "    OK - Pitch shifter ready at " << g_ttsSampleRate << " Hz\n";
     std::cout << "    Press 'P' to toggle pitch shifting (currently ON)\n";
 
     // Start audio
-    std::cout << "\n[6] Starting audio playback...\n";
+    std::cout << "\n[7] Starting audio playback...\n";
     if (audio.isRunning() || audio.start(audioCallback)) {
         std::cout << "    OK - Audio running\n";
     }
@@ -460,6 +551,7 @@ int main(int argc, char* argv[]) {
     std::cout << "\nShutting down...\n";
 
     audio.stop();
+    g_midiInput.close();
     g_tts.shutdown();
     g_ftClient.disconnect();
 

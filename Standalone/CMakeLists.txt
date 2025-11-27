@@ -28,6 +28,8 @@ set(SOURCES
     source/main.cpp
     source/WasapiAudio.h
     source/WasapiAudio.cpp
+    source/MidiInput.h
+    source/MidiInput.cpp
     ${WORLD_SOURCES}
 )
 
