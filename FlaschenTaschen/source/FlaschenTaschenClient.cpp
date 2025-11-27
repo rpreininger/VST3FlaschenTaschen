@@ -122,7 +122,7 @@ void FlaschenTaschenClient::setPixel(int x, int y, const Color& color) {
         return;
     }
 
-    // Horizontal flip: mirror x coordinate
+    // Horizontal flip to counter mirrored display
     int flippedX = width_ - 1 - x;
     int index = (y * width_ + flippedX) * 3;
     frameBuffer_[index] = color.r;
@@ -157,7 +157,7 @@ std::string FlaschenTaschenClient::buildPPMPacket() const {
     // Get header as string
     std::string header = packet.str();
 
-    // Build complete packet: header + binary pixel data
+    // Build complete packet: header + pixel data (already flipped in setPixel)
     std::string result;
     result.reserve(header.size() + frameBuffer_.size());
     result = header;
