@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vstgui-ui-description version="1">
+	<fonts>
+		<font font-name="Arial" name="title_font" size="16" bold="true"/>
+		<font font-name="Arial" name="label_font" size="12"/>
+		<font font-name="Arial" name="small_font" size="10"/>
+	</fonts>
+	<colors>
+		<color name="bg_dark" rgba="#1a1a1aff"/>
+		<color name="bg_panel" rgba="#2d2d2dff"/>
+		<color name="accent" rgba="#00aaffffaa"/>
+		<color name="text_light" rgba="#e0e0e0ff"/>
+		<color name="text_dim" rgba="#808080ff"/>
+		<color name="slider_bg" rgba="#404040ff"/>
+		<color name="slider_handle" rgba="#00ccffff"/>
+	</colors>
+
+	<template
+		name="view"
+		class="CViewContainer"
+		origin="0, 0"
+		size="500, 480"
+		background-color="bg_dark"
+		background-color-draw-style="filled"
+		mouse-enabled="true"
+		opacity="1"
+		transparent="false"
+	>
+		<!-- Title -->
+		<view
+			class="CTextLabel"
+			origin="10, 10"
+			size="480, 25"
+			title="FT-Vox - MIDI to LED Matrix with Voice"
+			font="title_font"
+			font-color="accent"
+			text-alignment="center"
+			transparent="true"
+		/>
+
+		<!-- Configuration File Panel -->
+		<view
+			class="CViewContainer"
+			origin="10, 40"
+			size="480, 50"
+			background-color="bg_panel"
+			background-color-draw-style="filled"
+		>
+			<view
+				class="CTextLabel"
+				origin="10, 5"
+				size="100, 18"
+				title="Mapping File:"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				custom-view-name="FilePathLabel"
+				class="CView"
+				origin="110, 5"
+				size="260, 18"
+			/>
+			<view
+				custom-view-name="FileBrowserButton"
+				class="CView"
+				origin="380, 3"
+				size="90, 22"
+			/>
+			<view
+				class="CTextLabel"
+				origin="10, 28"
+				size="460, 16"
+				title="Select an XML file with syllables and MIDI note mappings"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+		</view>
+
+		<!-- Display Settings Panel -->
+		<view
+			class="CViewContainer"
+			origin="10, 100"
+			size="235, 160"
+			background-color="bg_panel"
+			background-color-draw-style="filled"
+		>
+			<view
+				class="CTextLabel"
+				origin="10, 5"
+				size="215, 20"
+				title="Display Settings"
+				font="label_font"
+				font-color="text_light"
+				text-alignment="left"
+				transparent="true"
+			/>
+
+			<!-- Font Scale -->
+			<view
+				class="CTextLabel"
+				origin="10, 30"
+				size="80, 18"
+				title="Font Scale"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="100"
+				origin="95, 30"
+				size="120, 18"
+				background-color="slider_bg"
+				handle-color="slider_handle"
+				min-value="0"
+				max-value="1"
+				default-value="0"
+				orientation="horizontal"
+			/>
+
+			<!-- Color R -->
+			<view
+				class="CTextLabel"
+				origin="10, 55"
+				size="80, 18"
+				title="Color R"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="101"
+				origin="95, 55"
+				size="120, 18"
+				background-color="slider_bg"
+				handle-color="#ff4444ff"
+				min-value="0"
+				max-value="1"
+				default-value="1"
+				orientation="horizontal"
+			/>
+
+			<!-- Color G -->
+			<view
+				class="CTextLabel"
+				origin="10, 80"
+				size="80, 18"
+				title="Color G"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="102"
+				origin="95, 80"
+				size="120, 18"
+				background-color="slider_bg"
+				handle-color="#44ff44ff"
+				min-value="0"
+				max-value="1"
+				default-value="1"
+				orientation="horizontal"
+			/>
+
+			<!-- Color B -->
+			<view
+				class="CTextLabel"
+				origin="10, 105"
+				size="80, 18"
+				title="Color B"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="103"
+				origin="95, 105"
+				size="120, 18"
+				background-color="slider_bg"
+				handle-color="#4444ffff"
+				min-value="0"
+				max-value="1"
+				default-value="1"
+				orientation="horizontal"
+			/>
+
+			<!-- Color Preview -->
+			<view
+				class="CTextLabel"
+				origin="10, 130"
+				size="205, 20"
+				title="Preview: Set RGB values above"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="center"
+				transparent="true"
+			/>
+		</view>
+
+		<!-- TTS Settings Panel -->
+		<view
+			class="CViewContainer"
+			origin="255, 100"
+			size="235, 160"
+			background-color="bg_panel"
+			background-color-draw-style="filled"
+		>
+			<view
+				class="CTextLabel"
+				origin="10, 5"
+				size="215, 20"
+				title="Text-to-Speech (eSpeak-NG)"
+				font="label_font"
+				font-color="text_light"
+				text-alignment="left"
+				transparent="true"
+			/>
+
+			<!-- TTS Enabled -->
+			<view
+				class="CTextLabel"
+				origin="10, 30"
+				size="80, 18"
+				title="Enabled"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="COnOffButton"
+				control-tag="104"
+				origin="95, 30"
+				size="40, 18"
+				default-value="1"
+			/>
+
+			<!-- TTS Rate -->
+			<view
+				class="CTextLabel"
+				origin="10, 55"
+				size="80, 18"
+				title="Speed"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="105"
+				origin="95, 55"
+				size="120, 18"
+				background-color="slider_bg"
+				handle-color="slider_handle"
+				min-value="0"
+				max-value="1"
+				default-value="0.5"
+				orientation="horizontal"
+			/>
+
+			<!-- TTS Pitch -->
+			<view
+				class="CTextLabel"
+				origin="10, 80"
+				size="80, 18"
+				title="TTS Pitch"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="106"
+				origin="95, 80"
+				size="120, 18"
+				background-color="slider_bg"
+				handle-color="slider_handle"
+				min-value="0"
+				max-value="1"
+				default-value="0.5"
+				orientation="horizontal"
+			/>
+
+			<!-- TTS Volume -->
+			<view
+				class="CTextLabel"
+				origin="10, 105"
+				size="80, 18"
+				title="Volume"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="107"
+				origin="95, 105"
+				size="120, 18"
+				background-color="slider_bg"
+				handle-color="slider_handle"
+				min-value="0"
+				max-value="1"
+				default-value="0.5"
+				orientation="horizontal"
+			/>
+
+			<view
+				class="CTextLabel"
+				origin="10, 130"
+				size="205, 20"
+				title="Requires eSpeak-NG installed"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="center"
+				transparent="true"
+			/>
+		</view>
+
+		<!-- Pitch Shifting Panel -->
+		<view
+			class="CViewContainer"
+			origin="10, 270"
+			size="480, 60"
+			background-color="bg_panel"
+			background-color-draw-style="filled"
+		>
+			<view
+				class="CTextLabel"
+				origin="10, 5"
+				size="200, 20"
+				title="Pitch Shifting (World Vocoder)"
+				font="label_font"
+				font-color="text_light"
+				text-alignment="left"
+				transparent="true"
+			/>
+
+			<!-- Pitch Shift Enabled -->
+			<view
+				class="CTextLabel"
+				origin="10, 32"
+				size="80, 18"
+				title="Enabled"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="COnOffButton"
+				control-tag="108"
+				origin="95, 32"
+				size="40, 18"
+				default-value="1"
+			/>
+
+			<!-- Octave Offset -->
+			<view
+				class="CTextLabel"
+				origin="200, 32"
+				size="100, 18"
+				title="Octave Offset"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+			/>
+			<view
+				class="CSlider"
+				control-tag="109"
+				origin="305, 32"
+				size="160, 18"
+				background-color="slider_bg"
+				handle-color="#ff9900ff"
+				min-value="0"
+				max-value="1"
+				default-value="0.5"
+				orientation="horizontal"
+			/>
+		</view>
+
+		<!-- Instructions Panel -->
+		<view
+			class="CViewContainer"
+			origin="10, 340"
+			size="480, 130"
+			background-color="bg_panel"
+			background-color-draw-style="filled"
+		>
+			<view
+				class="CTextLabel"
+				origin="10, 5"
+				size="460, 20"
+				title="Instructions"
+				font="label_font"
+				font-color="text_light"
+				text-alignment="left"
+				transparent="true"
+			/>
+
+			<view
+				class="CMultiLineTextLabel"
+				origin="10, 30"
+				size="460, 90"
+				title="1. Click Browse to load an XML mapping file with syllables and MIDI note mappings.
+2. Configure the server IP and port in the XML file.
+3. Send MIDI notes to trigger syllables on the LED display.
+4. Each MIDI note triggers the corresponding syllable and pitch-shifted TTS.
+
+Example XML: &lt;Mapping&gt;&lt;Global&gt;&lt;Server ip='127.0.0.1' port='1337'/&gt;&lt;/Global&gt;
+  &lt;Syllables&gt;&lt;S id='0' text='ka'/&gt;&lt;/Syllables&gt;
+  &lt;Notes&gt;&lt;Note midi='60' syllable_id='0'/&gt;&lt;/Notes&gt;&lt;/Mapping&gt;"
+				font="small_font"
+				font-color="text_dim"
+				text-alignment="left"
+				transparent="true"
+				line-layout="wrap"
+			/>
+		</view>
+	</template>
+
+	<control-tags>
+		<control-tag name="FontScale" tag="100"/>
+		<control-tag name="ColorR" tag="101"/>
+		<control-tag name="ColorG" tag="102"/>
+		<control-tag name="ColorB" tag="103"/>
+		<control-tag name="TTSEnabled" tag="104"/>
+		<control-tag name="TTSRate" tag="105"/>
+		<control-tag name="TTSPitch" tag="106"/>
+		<control-tag name="TTSVolume" tag="107"/>
+		<control-tag name="PitchShiftEnabled" tag="108"/>
+		<control-tag name="OctaveOffset" tag="109"/>
+	</control-tags>
+
+	<custom>
+		<attributes name="FocusDrawing"/>
+		<attributes Path="D:/Developer/C++/VSTPlugins/FlaschenTaschen/FlaschenTaschen/resource/myplugineditor.uidesc" name="VST3Editor"/>
+		<attributes name="UIGridController"/>
+		<attributes SelectedTemplate="view" name="UITemplateController"/>
+		<attributes name="UIEditController"/>
+		<attributes name="UIAttributesController"/>
+	</custom>
+
+	<bitmaps/>
+</vstgui-ui-description>

@@ -6,27 +6,29 @@
 
 #include "public.sdk/source/vst/vsteditcontroller.h"
 #include "vstgui/plugin-bindings/vst3editor.h"
+#include "vstgui/lib/controls/cbuttons.h"
+#include "vstgui/lib/controls/ctextlabel.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 
 #include <string>
 
-namespace FlaschenTaschen {
+namespace FTVox {
 
 //------------------------------------------------------------------------
-//  FlaschenTaschenController
+//  FTVoxController
 //------------------------------------------------------------------------
-class FlaschenTaschenController : public Steinberg::Vst::EditControllerEx1,
-                                   public VSTGUI::VST3EditorDelegate
+class FTVoxController : public Steinberg::Vst::EditControllerEx1,
+                        public VSTGUI::VST3EditorDelegate
 {
 public:
 //------------------------------------------------------------------------
-    FlaschenTaschenController() = default;
-    ~FlaschenTaschenController() SMTG_OVERRIDE = default;
+    FTVoxController() = default;
+    ~FTVoxController() SMTG_OVERRIDE = default;
 
     // Create function
     static Steinberg::FUnknown* createInstance(void* /*context*/)
     {
-        return (Steinberg::Vst::IEditController*)new FlaschenTaschenController;
+        return (Steinberg::Vst::IEditController*)new FTVoxController;
     }
 
     //--- from IPluginBase -----------------------------------------------
@@ -59,6 +61,12 @@ public:
     // Send message to processor
     void sendMappingFilePath(const std::string& path);
 
+    // Get current mapping file path
+    const std::string& getMappingFilePath() const { return mappingFilePath_; }
+
+    // Open file browser to select mapping file
+    void openFileBrowser(VSTGUI::CFrame* frame);
+
     //---Interface---------
     DEFINE_INTERFACES
         // DEF_INTERFACE(Steinberg::Vst::IMidiMapping)
@@ -68,7 +76,8 @@ public:
 //------------------------------------------------------------------------
 protected:
     std::string mappingFilePath_;
+    VSTGUI::CTextLabel* filePathLabel_ = nullptr;
 };
 
 //------------------------------------------------------------------------
-} // namespace FlaschenTaschen
+} // namespace FTVox

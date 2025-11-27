@@ -9,33 +9,33 @@
 
 #include "public.sdk/source/main/pluginfactory.h"
 
-#define stringPluginName "FlaschenTaschen"
+#define stringPluginName "FT-Vox"
 
 using namespace Steinberg::Vst;
-using namespace FlaschenTaschen;
+using namespace FTVox;
 
 //------------------------------------------------------------------------
 //  VST Plug-in Entry
 //------------------------------------------------------------------------
 
-BEGIN_FACTORY_DEF ("Stratojets", 
-			       "https://www.mycompanyname.com", 
+BEGIN_FACTORY_DEF ("Stratojets",
+			       "https://www.mycompanyname.com",
 			       "mailto:ralf.preininger@gmail.com")
 
 	//---First Plug-in included in this factory-------
 	// its kVstAudioEffectClass component
-	DEF_CLASS2 (INLINE_UID_FROM_FUID(kFlaschenTaschenProcessorUID),
+	DEF_CLASS2 (INLINE_UID_FROM_FUID(kFTVoxProcessorUID),
 				PClassInfo::kManyInstances,	// cardinality
 				kVstAudioEffectClass,	// the component category (do not changed this)
 				stringPluginName,		// here the Plug-in name (to be changed)
 				Vst::kDistributable,	// means that component and controller could be distributed on different computers
-				FlaschenTaschenVST3Category, // Subcategory for this Plug-in (to be changed)
+				FTVoxVST3Category, // Subcategory for this Plug-in (to be changed)
 				FULL_VERSION_STR,		// Plug-in version (to be changed)
 				kVstVersionString,		// the VST 3 SDK version (do not changed this, use always this define)
-				FlaschenTaschenProcessor::createInstance)	// function pointer called when this component should be instantiated
+				FTVoxProcessor::createInstance)	// function pointer called when this component should be instantiated
 
 	// its kVstComponentControllerClass component
-	DEF_CLASS2 (INLINE_UID_FROM_FUID (kFlaschenTaschenControllerUID),
+	DEF_CLASS2 (INLINE_UID_FROM_FUID (kFTVoxControllerUID),
 				PClassInfo::kManyInstances, // cardinality
 				kVstComponentControllerClass,// the Controller category (do not changed this)
 				stringPluginName "Controller",	// controller name (could be the same than component name)
@@ -43,7 +43,7 @@ BEGIN_FACTORY_DEF ("Stratojets",
 				"",						// not used here
 				FULL_VERSION_STR,		// Plug-in version (to be changed)
 				kVstVersionString,		// the VST 3 SDK version (do not changed this, use always this define)
-				FlaschenTaschenController::createInstance)// function pointer called when this component should be instantiated
+				FTVoxController::createInstance)// function pointer called when this component should be instantiated
 
 	//----for others Plug-ins contained in this factory, put like for the first Plug-in different DEF_CLASS2---
 

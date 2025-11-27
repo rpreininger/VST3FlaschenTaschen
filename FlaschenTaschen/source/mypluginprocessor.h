@@ -9,13 +9,15 @@
 #include "FlaschenTaschenClient.h"
 #include "BitmapFont.h"
 #include "ESpeakSynthesizer.h"
+#include "WorldPitchShifter.h"
 
 #include <memory>
 #include <string>
 #include <atomic>
 #include <mutex>
+#include <vector>
 
-namespace FlaschenTaschen {
+namespace FTVox {
 
 // Parameter IDs
 enum ParameterIDs : Steinberg::Vst::ParamID {
@@ -27,21 +29,23 @@ enum ParameterIDs : Steinberg::Vst::ParamID {
     kParamTTSRate,
     kParamTTSPitch,
     kParamTTSVolume,
+    kParamPitchShiftEnabled,
+    kParamOctaveOffset,
 };
 
 //------------------------------------------------------------------------
-//  FlaschenTaschenProcessor
+//  FTVoxProcessor
 //------------------------------------------------------------------------
-class FlaschenTaschenProcessor : public Steinberg::Vst::AudioEffect
+class FTVoxProcessor : public Steinberg::Vst::AudioEffect
 {
 public:
-    FlaschenTaschenProcessor();
-    ~FlaschenTaschenProcessor() SMTG_OVERRIDE;
+    FTVoxProcessor();
+    ~FTVoxProcessor() SMTG_OVERRIDE;
 
     // Create function
     static Steinberg::FUnknown* createInstance(void* /*context*/)
     {
-        return (Steinberg::Vst::IAudioProcessor*)new FlaschenTaschenProcessor;
+        return (Steinberg::Vst::IAudioProcessor*)new FTVoxProcessor;
     }
 
     //--- ---------------------------------------------------------------------
@@ -86,28 +90,42 @@ protected:
     // Send current syllable to LED display
     void updateDisplay(const std::string& syllable);
 
-    // Speak current syllable using TTS
-    void speakSyllable(const std::string& syllable);
+    // Speak current syllable using TTS with pitch shifting
+    void speakSyllable(const std::string& syllable, int midiNote);
 
     // Process TTS audio output
     void processTTSAudio(Steinberg::Vst::Sample32** outputs, int numChannels, int numSamples);
 
+    // Resample audio from one sample rate to another
+    std::vector<float> resample(const std::vector<float>& input, int inputRate, int outputRate);
+
+    // Handle message from controller (for file path)
+    Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) SMTG_OVERRIDE;
+
 private:
     // Configuration
-    MappingConfig config_;
+    FlaschenTaschen::MappingConfig config_;
     std::string configFilePath_;
     std::atomic<bool> configLoaded_{false};
     mutable std::mutex configMutex_;
 
     // FlaschenTaschen client
-    std::unique_ptr<FlaschenTaschenClient> ftClient_;
+    std::unique_ptr<FlaschenTaschen::FlaschenTaschenClient> ftClient_;
     std::atomic<bool> ftConnected_{false};
 
     // Font renderer
-    BitmapFont font_;
+    FlaschenTaschen::BitmapFont font_;
 
     // TTS synthesizer
-    std::unique_ptr<ESpeakSynthesizer> tts_;
+    std::unique_ptr<FlaschenTaschen::ESpeakSynthesizer> tts_;
+    int ttsSampleRate_ = 22050;  // eSpeak native rate
+
+    // World pitch shifter
+    std::unique_ptr<FlaschenTaschen::WorldPitchShifter> pitchShifter_;
+
+    // TTS audio buffer for playback
+    std::vector<float> ttsAudioBuffer_;
+    std::mutex ttsBufferMutex_;
 
     // Current state
     std::string currentSyllable_;
@@ -122,10 +140,12 @@ private:
     std::atomic<float> ttsRate_{0.5f};   // Normalized 0-1
     std::atomic<float> ttsPitch_{0.5f};  // Normalized 0-1
     std::atomic<float> ttsVolume_{0.5f}; // Normalized 0-1
+    std::atomic<bool> pitchShiftEnabled_{true};
+    std::atomic<int> octaveOffset_{0};   // -3 to +3
 
     // Audio processing
     double sampleRate_ = 44100.0;
 };
 
 //------------------------------------------------------------------------
-} // namespace FlaschenTaschen
+} // namespace FTVox

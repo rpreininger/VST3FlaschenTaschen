@@ -7,15 +7,17 @@
 #include "myplugincids.h"
 #include "base/source/fstreamer.h"
 #include "base/source/fstring.h"
+#include "vstgui/lib/cfileselector.h"
+#include "vstgui/lib/cframe.h"
 
 using namespace Steinberg;
 
-namespace FlaschenTaschen {
+namespace FTVox {
 
 //------------------------------------------------------------------------
-// FlaschenTaschenController Implementation
+// FTVoxController Implementation
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenController::initialize(FUnknown* context)
+tresult PLUGIN_API FTVoxController::initialize(FUnknown* context)
 {
     tresult result = EditControllerEx1::initialize(context);
     if (result != kResultOk)
@@ -73,17 +75,29 @@ tresult PLUGIN_API FlaschenTaschenController::initialize(FUnknown* context)
                             Vst::ParameterInfo::kCanAutomate,
                             kParamTTSVolume);
 
+    // Pitch Shift Enabled (on/off)
+    parameters.addParameter(STR16("Pitch Shift"), nullptr, 1,
+                            1.0, // default on
+                            Vst::ParameterInfo::kCanAutomate | Vst::ParameterInfo::kIsList,
+                            kParamPitchShiftEnabled);
+
+    // Octave Offset (-3 to +3, mapped to 0-1)
+    parameters.addParameter(STR16("Octave Offset"), STR16("oct"), 0,
+                            0.5, // default 0 (middle)
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamOctaveOffset);
+
     return result;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenController::terminate()
+tresult PLUGIN_API FTVoxController::terminate()
 {
     return EditControllerEx1::terminate();
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenController::setComponentState(IBStream* state)
+tresult PLUGIN_API FTVoxController::setComponentState(IBStream* state)
 {
     if (!state)
         return kResultFalse;
@@ -131,7 +145,7 @@ tresult PLUGIN_API FlaschenTaschenController::setComponentState(IBStream* state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenController::setState(IBStream* state)
+tresult PLUGIN_API FTVoxController::setState(IBStream* state)
 {
     IBStreamer streamer(state, kLittleEndian);
 
@@ -150,7 +164,7 @@ tresult PLUGIN_API FlaschenTaschenController::setState(IBStream* state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenController::getState(IBStream* state)
+tresult PLUGIN_API FTVoxController::getState(IBStream* state)
 {
     IBStreamer streamer(state, kLittleEndian);
 
@@ -165,7 +179,7 @@ tresult PLUGIN_API FlaschenTaschenController::getState(IBStream* state)
 }
 
 //------------------------------------------------------------------------
-IPlugView* PLUGIN_API FlaschenTaschenController::createView(FIDString name)
+IPlugView* PLUGIN_API FTVoxController::createView(FIDString name)
 {
     if (FIDStringsEqual(name, Vst::ViewType::kEditor))
     {
@@ -176,7 +190,27 @@ IPlugView* PLUGIN_API FlaschenTaschenController::createView(FIDString name)
 }
 
 //------------------------------------------------------------------------
-VSTGUI::CView* FlaschenTaschenController::createCustomView(
+// Custom button listener for file browser
+class FileBrowserButtonListener : public VSTGUI::IControlListener
+{
+public:
+    FileBrowserButtonListener(FTVoxController* controller, VSTGUI::CFrame* frame)
+        : controller_(controller), frame_(frame) {}
+
+    void valueChanged(VSTGUI::CControl* control) override
+    {
+        if (control->getValue() > 0.5f && controller_ && frame_) {
+            controller_->openFileBrowser(frame_);
+        }
+    }
+
+private:
+    FTVoxController* controller_;
+    VSTGUI::CFrame* frame_;
+};
+
+//------------------------------------------------------------------------
+VSTGUI::CView* FTVoxController::createCustomView(
     VSTGUI::UTF8StringPtr name,
     const VSTGUI::UIAttributes& attributes,
     const VSTGUI::IUIDescription* description,
@@ -184,21 +218,38 @@ VSTGUI::CView* FlaschenTaschenController::createCustomView(
 {
     (void)attributes;
     (void)description;
-    (void)editor;
-    (void)name;
 
-    // Custom views can be created here if needed
+    if (name && strcmp(name, "FileBrowserButton") == 0)
+    {
+        // Create a text button for file browsing
+        auto button = new VSTGUI::CTextButton(VSTGUI::CRect(0, 0, 100, 25), nullptr, -1, "Browse...");
+        button->setListener(new FileBrowserButtonListener(this, editor->getFrame()));
+        return button;
+    }
+
+    if (name && strcmp(name, "FilePathLabel") == 0)
+    {
+        // Create a label to show current file path
+        auto label = new VSTGUI::CTextLabel(VSTGUI::CRect(0, 0, 300, 20));
+        label->setText(mappingFilePath_.empty() ? "(no file selected)" : mappingFilePath_.c_str());
+        label->setBackColor(VSTGUI::CColor(40, 40, 40, 255));
+        label->setFontColor(VSTGUI::CColor(200, 200, 200, 255));
+        label->setHoriAlign(VSTGUI::CHoriTxtAlign::kLeftText);
+        filePathLabel_ = label;
+        return label;
+    }
+
     return nullptr;
 }
 
 //------------------------------------------------------------------------
-void FlaschenTaschenController::willClose(VSTGUI::VST3Editor* editor)
+void FTVoxController::willClose(VSTGUI::VST3Editor* editor)
 {
     (void)editor;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenController::notify(Vst::IMessage* message)
+tresult PLUGIN_API FTVoxController::notify(Vst::IMessage* message)
 {
     if (!message)
         return kInvalidArgument;
@@ -209,7 +260,7 @@ tresult PLUGIN_API FlaschenTaschenController::notify(Vst::IMessage* message)
 }
 
 //------------------------------------------------------------------------
-void FlaschenTaschenController::sendMappingFilePath(const std::string& path)
+void FTVoxController::sendMappingFilePath(const std::string& path)
 {
     mappingFilePath_ = path;
 
@@ -223,7 +274,54 @@ void FlaschenTaschenController::sendMappingFilePath(const std::string& path)
         sendMessage(message);
         message->release();
     }
+
+    // Update file path label if exists
+    if (filePathLabel_) {
+        // Extract just the filename from the path
+        std::string filename = path;
+        size_t lastSlash = path.find_last_of("/\\");
+        if (lastSlash != std::string::npos) {
+            filename = path.substr(lastSlash + 1);
+        }
+        filePathLabel_->setText(VSTGUI::UTF8String(filename));
+    }
 }
 
 //------------------------------------------------------------------------
-} // namespace FlaschenTaschen
+void FTVoxController::openFileBrowser(VSTGUI::CFrame* frame)
+{
+    if (!frame)
+        return;
+
+    auto fileSelector = VSTGUI::CNewFileSelector::create(frame, VSTGUI::CNewFileSelector::kSelectFile);
+    if (fileSelector)
+    {
+        fileSelector->setTitle("Select Mapping XML File");
+        fileSelector->setDefaultExtension(VSTGUI::CFileExtension("XML Files", "xml"));
+        fileSelector->addFileExtension(VSTGUI::CFileExtension("All Files", "*"));
+
+        // Set initial directory if we have a previous path
+        if (!mappingFilePath_.empty()) {
+            std::string dir = mappingFilePath_;
+            size_t lastSlash = dir.find_last_of("/\\");
+            if (lastSlash != std::string::npos) {
+                dir = dir.substr(0, lastSlash);
+                fileSelector->setInitialDirectory(dir.c_str());
+            }
+        }
+
+        fileSelector->run([this](VSTGUI::CNewFileSelector* selector) {
+            if (selector->getNumSelectedFiles() > 0) {
+                VSTGUI::UTF8StringPtr selectedFile = selector->getSelectedFile(0);
+                if (selectedFile) {
+                    sendMappingFilePath(std::string(selectedFile));
+                }
+            }
+        });
+
+        fileSelector->forget();
+    }
+}
+
+//------------------------------------------------------------------------
+} // namespace FTVox

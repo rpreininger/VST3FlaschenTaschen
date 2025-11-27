@@ -14,10 +14,12 @@
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "pluginterfaces/vst/ivstevents.h"
+#include "pluginterfaces/vst/ivstmessage.h"
 
 #include <fstream>
 #include <cstring>
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -32,24 +34,25 @@ void logToFile(const std::string& message) {
 } // anonymous namespace
 
 using namespace Steinberg;
+using namespace FlaschenTaschen;
 
-namespace FlaschenTaschen {
+namespace FTVox {
 
 //------------------------------------------------------------------------
-// FlaschenTaschenProcessor
+// FTVoxProcessor
 //------------------------------------------------------------------------
-FlaschenTaschenProcessor::FlaschenTaschenProcessor()
+FTVoxProcessor::FTVoxProcessor()
 {
-    setControllerClass(kFlaschenTaschenControllerUID);
+    setControllerClass(kFTVoxControllerUID);
 }
 
 //------------------------------------------------------------------------
-FlaschenTaschenProcessor::~FlaschenTaschenProcessor()
+FTVoxProcessor::~FTVoxProcessor()
 {
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::initialize(FUnknown* context)
+tresult PLUGIN_API FTVoxProcessor::initialize(FUnknown* context)
 {
     tresult result = AudioEffect::initialize(context);
     if (result != kResultOk)
@@ -69,13 +72,16 @@ tresult PLUGIN_API FlaschenTaschenProcessor::initialize(FUnknown* context)
     // Initialize TTS synthesizer
     tts_ = std::make_unique<ESpeakSynthesizer>();
 
+    // Initialize pitch shifter
+    pitchShifter_ = std::make_unique<WorldPitchShifter>();
+
     logToFile("FlaschenTaschen plugin initialized");
 
     return kResultOk;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::terminate()
+tresult PLUGIN_API FTVoxProcessor::terminate()
 {
     // Disconnect from server
     if (ftClient_) {
@@ -95,7 +101,7 @@ tresult PLUGIN_API FlaschenTaschenProcessor::terminate()
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::setActive(TBool state)
+tresult PLUGIN_API FTVoxProcessor::setActive(TBool state)
 {
     if (state)
     {
@@ -121,13 +127,22 @@ tresult PLUGIN_API FlaschenTaschenProcessor::setActive(TBool state)
             }
         }
 
-        // Initialize TTS
+        // Initialize TTS at eSpeak native rate (22050 Hz)
         if (tts_ && !tts_->isInitialized()) {
-            if (tts_->initialize(static_cast<int>(sampleRate_))) {
-                logToFile("TTS initialized at sample rate: " + std::to_string(sampleRate_));
+            ttsSampleRate_ = 22050;  // eSpeak's preferred rate
+            if (tts_->initialize(ttsSampleRate_)) {
+                ttsSampleRate_ = tts_->getSampleRate();  // Get actual rate
+                logToFile("TTS initialized at sample rate: " + std::to_string(ttsSampleRate_));
+                logToFile("Output sample rate: " + std::to_string(sampleRate_) + " (will resample)");
             } else {
                 logToFile("TTS initialization failed: " + tts_->getLastError());
             }
+        }
+
+        // Initialize pitch shifter at TTS sample rate
+        if (pitchShifter_) {
+            pitchShifter_->initialize(ttsSampleRate_);
+            logToFile("Pitch shifter initialized at " + std::to_string(ttsSampleRate_) + " Hz");
         }
     }
     else
@@ -143,7 +158,7 @@ tresult PLUGIN_API FlaschenTaschenProcessor::setActive(TBool state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::process(Vst::ProcessData& data)
+tresult PLUGIN_API FTVoxProcessor::process(Vst::ProcessData& data)
 {
     // Process parameter changes
     if (data.inputParameterChanges)
@@ -194,6 +209,13 @@ tresult PLUGIN_API FlaschenTaschenProcessor::process(Vst::ProcessData& data)
                                 tts_->setVolume(static_cast<int>(value * 200)); // 0-200
                             }
                             break;
+                        case kParamPitchShiftEnabled:
+                            pitchShiftEnabled_ = value > 0.5;
+                            break;
+                        case kParamOctaveOffset:
+                            // Map 0-1 to -3 to +3 octaves
+                            octaveOffset_ = static_cast<int>(std::round(value * 6.0 - 3.0));
+                            break;
                     }
                 }
             }
@@ -240,7 +262,7 @@ tresult PLUGIN_API FlaschenTaschenProcessor::process(Vst::ProcessData& data)
 }
 
 //------------------------------------------------------------------------
-void FlaschenTaschenProcessor::handleNoteOn(int noteNumber, int velocity)
+void FTVoxProcessor::handleNoteOn(int noteNumber, int velocity)
 {
     (void)velocity;
 
@@ -263,15 +285,15 @@ void FlaschenTaschenProcessor::handleNoteOn(int noteNumber, int velocity)
         // Update LED display
         updateDisplay(syllable);
 
-        // Speak syllable via TTS
+        // Speak syllable via TTS with pitch shifting
         if (ttsEnabled_) {
-            speakSyllable(syllable);
+            speakSyllable(syllable, noteNumber);
         }
     }
 }
 
 //------------------------------------------------------------------------
-void FlaschenTaschenProcessor::handleNoteOff(int noteNumber)
+void FTVoxProcessor::handleNoteOff(int noteNumber)
 {
     // Only clear if this is the currently displayed note
     if (currentNoteNumber_ == noteNumber) {
@@ -286,7 +308,7 @@ void FlaschenTaschenProcessor::handleNoteOff(int noteNumber)
 }
 
 //------------------------------------------------------------------------
-void FlaschenTaschenProcessor::updateDisplay(const std::string& syllable)
+void FTVoxProcessor::updateDisplay(const std::string& syllable)
 {
     if (!ftConnected_ || !ftClient_) {
         return;
@@ -314,7 +336,7 @@ void FlaschenTaschenProcessor::updateDisplay(const std::string& syllable)
 }
 
 //------------------------------------------------------------------------
-void FlaschenTaschenProcessor::speakSyllable(const std::string& syllable)
+void FTVoxProcessor::speakSyllable(const std::string& syllable, int midiNote)
 {
     if (!tts_ || !tts_->isInitialized()) {
         return;
@@ -323,51 +345,145 @@ void FlaschenTaschenProcessor::speakSyllable(const std::string& syllable)
     // Stop any current speech
     tts_->stop();
 
-    // Start speaking the new syllable
+    // Generate TTS audio synchronously
     tts_->speak(syllable);
-}
 
-//------------------------------------------------------------------------
-void FlaschenTaschenProcessor::processTTSAudio(Vst::Sample32** outputs, int numChannels, int numSamples)
-{
-    if (!tts_) {
-        // Clear outputs
-        for (int c = 0; c < numChannels; ++c) {
-            std::memset(outputs[c], 0, numSamples * sizeof(Vst::Sample32));
-        }
+    // Get generated audio samples
+    auto samples = tts_->getAudioSamples();
+    if (samples.empty()) {
         return;
     }
 
-    // Get available TTS samples
-    size_t available = tts_->getAvailableSamples();
+    logToFile("TTS generated " + std::to_string(samples.size()) + " samples");
 
-    if (available > 0) {
-        // Read mono TTS samples
-        size_t samplesToRead = std::min(available, static_cast<size_t>(numSamples));
-        std::vector<float> ttsBuffer(samplesToRead);
-        size_t read = tts_->readSamples(ttsBuffer.data(), samplesToRead);
-
-        // Copy to all output channels (mono to stereo)
-        for (int c = 0; c < numChannels; ++c) {
-            for (size_t i = 0; i < read; ++i) {
-                outputs[c][i] = ttsBuffer[i];
-            }
-            // Clear remaining samples
-            for (int i = static_cast<int>(read); i < numSamples; ++i) {
-                outputs[c][i] = 0.0f;
-            }
-        }
+    // Apply pitch shifting based on MIDI note + octave offset
+    if (pitchShiftEnabled_ && pitchShifter_) {
+        int pitchNote = midiNote + (octaveOffset_ * 12);
+        if (pitchNote < 0) pitchNote = 0;
+        if (pitchNote > 127) pitchNote = 127;
+        double targetFreq = WorldPitchShifter::midiNoteToFrequency(pitchNote);
+        samples = pitchShifter_->processToFrequency(samples, targetFreq);
+        logToFile("Pitch shifted to " + std::to_string(targetFreq) + " Hz (MIDI " + std::to_string(pitchNote) + ")");
     }
-    else {
-        // No TTS audio, clear outputs
-        for (int c = 0; c < numChannels; ++c) {
-            std::memset(outputs[c], 0, numSamples * sizeof(Vst::Sample32));
-        }
+
+    // Resample from TTS rate to output rate
+    int outputRate = static_cast<int>(sampleRate_);
+    if (ttsSampleRate_ != outputRate) {
+        samples = resample(samples, ttsSampleRate_, outputRate);
+        logToFile("Resampled " + std::to_string(ttsSampleRate_) + " -> " + std::to_string(outputRate) + " Hz");
+    }
+
+    // Add to playback buffer
+    {
+        std::lock_guard<std::mutex> lock(ttsBufferMutex_);
+        ttsAudioBuffer_.insert(ttsAudioBuffer_.end(), samples.begin(), samples.end());
     }
 }
 
 //------------------------------------------------------------------------
-bool FlaschenTaschenProcessor::loadMappingFile(const std::string& filePath)
+void FTVoxProcessor::processTTSAudio(Vst::Sample32** outputs, int numChannels, int numSamples)
+{
+    std::lock_guard<std::mutex> lock(ttsBufferMutex_);
+
+    int samplesAvailable = static_cast<int>(ttsAudioBuffer_.size());
+    int framesToRead = (std::min)(numSamples, samplesAvailable);
+
+    for (int frame = 0; frame < numSamples; ++frame) {
+        float sample = 0.0f;
+
+        if (frame < framesToRead && frame < static_cast<int>(ttsAudioBuffer_.size())) {
+            sample = ttsAudioBuffer_[frame];
+        }
+
+        // Write to all channels (mono to stereo)
+        for (int ch = 0; ch < numChannels; ++ch) {
+            outputs[ch][frame] = sample;
+        }
+    }
+
+    // Remove consumed samples
+    if (framesToRead > 0 && framesToRead <= static_cast<int>(ttsAudioBuffer_.size())) {
+        ttsAudioBuffer_.erase(ttsAudioBuffer_.begin(), ttsAudioBuffer_.begin() + framesToRead);
+    }
+}
+
+//------------------------------------------------------------------------
+std::vector<float> FTVoxProcessor::resample(const std::vector<float>& input, int inputRate, int outputRate)
+{
+    if (inputRate == outputRate || input.empty()) {
+        return input;
+    }
+
+    double ratio = static_cast<double>(outputRate) / inputRate;
+    size_t outputSize = static_cast<size_t>(input.size() * ratio);
+    std::vector<float> output(outputSize);
+
+    for (size_t i = 0; i < outputSize; ++i) {
+        double srcPos = i / ratio;
+        size_t srcIndex = static_cast<size_t>(srcPos);
+        double frac = srcPos - srcIndex;
+
+        if (srcIndex + 1 < input.size()) {
+            // Linear interpolation
+            output[i] = static_cast<float>(input[srcIndex] * (1.0 - frac) + input[srcIndex + 1] * frac);
+        } else if (srcIndex < input.size()) {
+            output[i] = input[srcIndex];
+        } else {
+            output[i] = 0.0f;
+        }
+    }
+
+    return output;
+}
+
+//------------------------------------------------------------------------
+tresult PLUGIN_API FTVoxProcessor::notify(Vst::IMessage* message)
+{
+    if (!message)
+        return kInvalidArgument;
+
+    if (strcmp(message->getMessageID(), "MappingFile") == 0)
+    {
+        // Get the file path from the message
+        const void* data = nullptr;
+        Steinberg::uint32 size = 0;
+        if (message->getAttributes()->getBinary("Path", data, size) == kResultOk && data && size > 0)
+        {
+            // Convert from UTF-16 to UTF-8
+            const Steinberg::char16* path16 = static_cast<const Steinberg::char16*>(data);
+            std::string path;
+            while (*path16) {
+                path += static_cast<char>(*path16++);
+            }
+
+            logToFile("Received mapping file path: " + path);
+            loadMappingFile(path);
+
+            // Reconnect to server with new config
+            if (configLoaded_ && ftClient_) {
+                ftClient_->disconnect();
+                const auto& server = config_.getServerConfig();
+                const auto& display = config_.getDisplayConfig();
+                ftClient_->setDisplaySize(display.width, display.height);
+                ftClient_->setOffset(display.offsetX, display.offsetY);
+                ftClient_->setLayer(display.layer);
+                ftClient_->setFlipHorizontal(display.flipHorizontal);
+                font_.setMirrorGlyph(display.mirrorGlyph);
+
+                if (ftClient_->connect(server.ip, server.port)) {
+                    ftConnected_ = true;
+                    logToFile("Reconnected to FlaschenTaschen server");
+                }
+            }
+        }
+        return kResultOk;
+    }
+
+    return AudioEffect::notify(message);
+}
+
+//------------------------------------------------------------------------
+bool FTVoxProcessor::loadMappingFile(const std::string& filePath)
 {
     std::lock_guard<std::mutex> lock(configMutex_);
 
@@ -392,13 +508,13 @@ bool FlaschenTaschenProcessor::loadMappingFile(const std::string& filePath)
 }
 
 //------------------------------------------------------------------------
-std::string FlaschenTaschenProcessor::getCurrentSyllable() const
+std::string FTVoxProcessor::getCurrentSyllable() const
 {
     return currentSyllable_;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::setupProcessing(Vst::ProcessSetup& newSetup)
+tresult PLUGIN_API FTVoxProcessor::setupProcessing(Vst::ProcessSetup& newSetup)
 {
     sampleRate_ = newSetup.sampleRate;
 
@@ -412,7 +528,7 @@ tresult PLUGIN_API FlaschenTaschenProcessor::setupProcessing(Vst::ProcessSetup& 
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::canProcessSampleSize(int32 symbolicSampleSize)
+tresult PLUGIN_API FTVoxProcessor::canProcessSampleSize(int32 symbolicSampleSize)
 {
     if (symbolicSampleSize == Vst::kSample32)
         return kResultTrue;
@@ -421,7 +537,7 @@ tresult PLUGIN_API FlaschenTaschenProcessor::canProcessSampleSize(int32 symbolic
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::setState(IBStream* state)
+tresult PLUGIN_API FTVoxProcessor::setState(IBStream* state)
 {
     IBStreamer streamer(state, kLittleEndian);
 
@@ -469,7 +585,7 @@ tresult PLUGIN_API FlaschenTaschenProcessor::setState(IBStream* state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API FlaschenTaschenProcessor::getState(IBStream* state)
+tresult PLUGIN_API FTVoxProcessor::getState(IBStream* state)
 {
     IBStreamer streamer(state, kLittleEndian);
 
@@ -494,4 +610,4 @@ tresult PLUGIN_API FlaschenTaschenProcessor::getState(IBStream* state)
 }
 
 //------------------------------------------------------------------------
-} // namespace FlaschenTaschen
+} // namespace FTVox
