@@ -58,9 +58,11 @@ ESpeakSynthesizer g_tts;
 WorldPitchShifter g_pitchShifter;
 MidiInput g_midiInput;
 VisualEffects g_visualEffects;
+PolyLightOrgan g_lightOrgan;      // Polyphonic light organ mode
 bool g_pitchShiftEnabled = true;  // Enable/disable pitch shifting
 int g_octaveOffset = 0;           // Octave shift (-3 to +3)
 bool g_effectsEnabled = true;     // Enable/disable visual effects
+bool g_lightOrganMode = false;    // Light organ mode (bypasses syllables/effects)
 
 // Sample rate conversion
 int g_ttsSampleRate = 22050;  // eSpeak default
@@ -314,6 +316,8 @@ void printUsage() {
     std::cout << "  Q/-  -> Octave DOWN\n";
     std::cout << "  P    -> Toggle pitch shifting ON/OFF\n";
     std::cout << "  E    -> Toggle visual effects ON/OFF\n";
+    std::cout << "  L    -> Toggle LIGHT ORGAN mode (poly aftertouch visualizer)\n";
+    std::cout << "  R    -> Toggle rainbow/solid color in light organ mode\n";
     std::cout << "  T    -> Test tone (440 Hz)\n";
     std::cout << "  ESC  -> Quit\n";
     std::cout << "\n";
@@ -456,18 +460,32 @@ int main(int argc, char* argv[]) {
             // Set up MIDI note callback
             g_midiInput.setNoteCallback([](int channel, int note, int velocity) {
                 (void)channel;
-                if (velocity > 0) {
-                    // Note On - trigger the syllable/effect with velocity
-                    triggerNote(note, velocity);
+                if (g_lightOrganMode) {
+                    // Light organ mode - direct note to pixel mapping
+                    if (velocity > 0) {
+                        g_lightOrgan.noteOn(note, velocity);
+                    } else {
+                        g_lightOrgan.noteOff(note);
+                    }
+                } else {
+                    // Normal mode - trigger syllables/effects
+                    if (velocity > 0) {
+                        triggerNote(note, velocity);
+                    }
                 }
             });
 
             // Set up aftertouch callback for real-time brightness control
             g_midiInput.setAftertouchCallback([](int channel, int note, int pressure) {
                 (void)channel;
-                (void)note;  // For now, apply to current effect regardless of note
-                if (g_visualEffects.isPlaying()) {
-                    g_visualEffects.setBrightness(static_cast<float>(pressure) / 127.0f);
+                if (g_lightOrganMode) {
+                    // Light organ mode - polyphonic aftertouch per key
+                    g_lightOrgan.aftertouch(note, pressure);
+                } else {
+                    // Normal mode - apply to current effect
+                    if (g_visualEffects.isPlaying()) {
+                        g_visualEffects.setBrightness(static_cast<float>(pressure) / 127.0f);
+                    }
                 }
             });
         } else {
@@ -622,6 +640,31 @@ int main(int argc, char* argv[]) {
                 continue;
             }
 
+            // Toggle light organ mode with 'L'
+            if (key == 'l' || key == 'L') {
+                g_lightOrganMode = !g_lightOrganMode;
+                std::cout << "  LIGHT ORGAN mode: " << (g_lightOrganMode ? "ON" : "OFF");
+                if (g_lightOrganMode) {
+                    std::cout << " (rainbow: " << (g_lightOrgan.isRainbowMode() ? "ON" : "OFF") << ")";
+                    // Clear display when entering light organ mode
+                    g_visualEffects.stopEffect();
+                    g_lightOrgan.allNotesOff();
+                    if (g_ftClient.isConnected()) {
+                        g_ftClient.clear(Color::Black());
+                        g_ftClient.send();
+                    }
+                }
+                std::cout << std::endl;
+                continue;
+            }
+
+            // Toggle rainbow mode in light organ with 'R'
+            if (key == 'r' || key == 'R') {
+                g_lightOrgan.setRainbowMode(!g_lightOrgan.isRainbowMode());
+                std::cout << "  Light organ rainbow mode: " << (g_lightOrgan.isRainbowMode() ? "ON" : "OFF") << std::endl;
+                continue;
+            }
+
             // Convert key to MIDI note
             int midiNote = keyToMidiNote(key);
             if (midiNote >= 0) {
@@ -629,10 +672,17 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Update visual effects if running
-        if (g_ftClient.isConnected() && g_visualEffects.isPlaying()) {
-            if (g_visualEffects.update(g_ftClient)) {
+        // Update display based on mode
+        if (g_ftClient.isConnected()) {
+            if (g_lightOrganMode) {
+                // Light organ mode - render polyphonic key visualization
+                g_lightOrgan.render(g_ftClient);
                 g_ftClient.send();
+            } else if (g_visualEffects.isPlaying()) {
+                // Normal effects mode
+                if (g_visualEffects.update(g_ftClient)) {
+                    g_ftClient.send();
+                }
             }
         }
 

@@ -13,6 +13,164 @@
 namespace FlaschenTaschen {
 
 //------------------------------------------------------------------------
+// PolyLightOrgan implementation
+//------------------------------------------------------------------------
+PolyLightOrgan::PolyLightOrgan() {
+    for (auto& key : keys_) {
+        key.active = false;
+        key.brightness = 0.0f;
+    }
+}
+
+//------------------------------------------------------------------------
+void PolyLightOrgan::noteOn(int midiNote, int velocity) {
+    if (midiNote >= 0 && midiNote < 128) {
+        keys_[midiNote].active = true;
+        keys_[midiNote].brightness = static_cast<float>(velocity) / 127.0f;
+    }
+}
+
+//------------------------------------------------------------------------
+void PolyLightOrgan::noteOff(int midiNote) {
+    if (midiNote >= 0 && midiNote < 128) {
+        keys_[midiNote].active = false;
+        keys_[midiNote].brightness = 0.0f;
+    }
+}
+
+//------------------------------------------------------------------------
+void PolyLightOrgan::aftertouch(int midiNote, int pressure) {
+    float newBrightness = static_cast<float>(pressure) / 127.0f;
+
+    if (midiNote < 0) {
+        // Channel aftertouch - apply to all active notes
+        for (int i = 0; i < 128; ++i) {
+            if (keys_[i].active) {
+                keys_[i].brightness = newBrightness;
+            }
+        }
+    } else if (midiNote < 128) {
+        // Polyphonic aftertouch - apply to specific note
+        if (keys_[midiNote].active) {
+            keys_[midiNote].brightness = newBrightness;
+        }
+    }
+}
+
+//------------------------------------------------------------------------
+void PolyLightOrgan::setColor(uint8_t r, uint8_t g, uint8_t b) {
+    baseR_ = r;
+    baseG_ = g;
+    baseB_ = b;
+}
+
+//------------------------------------------------------------------------
+void PolyLightOrgan::getNotePixelRange(int midiNote, int displayWidth, int& startX, int& endX) const {
+    // Map C1 (24) to C6 (84) across the display width
+    // 61 keys need to fit in displayWidth pixels
+    // Each key gets approximately displayWidth / 61 pixels (~2.1 for 128 width)
+
+    int noteIndex = midiNote - MIN_NOTE;  // 0-60
+    if (noteIndex < 0) noteIndex = 0;
+    if (noteIndex >= NUM_KEYS) noteIndex = NUM_KEYS - 1;
+
+    float pixelsPerKey = static_cast<float>(displayWidth) / NUM_KEYS;
+
+    startX = static_cast<int>(noteIndex * pixelsPerKey);
+    endX = static_cast<int>((noteIndex + 1) * pixelsPerKey);
+
+    // Ensure at least 1 pixel wide
+    if (endX <= startX) endX = startX + 1;
+
+    // Clamp to display bounds
+    if (startX < 0) startX = 0;
+    if (endX > displayWidth) endX = displayWidth;
+}
+
+//------------------------------------------------------------------------
+Color PolyLightOrgan::hsvToRgb(float h, float s, float v) {
+    float r = 0, g = 0, b = 0;
+
+    int i = static_cast<int>(h * 6.0f);
+    float f = h * 6.0f - i;
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - f * s);
+    float t = v * (1.0f - (1.0f - f) * s);
+
+    switch (i % 6) {
+        case 0: r = v; g = t; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = t; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = t; g = p; b = v; break;
+        case 5: r = v; g = p; b = q; break;
+    }
+
+    return Color(
+        static_cast<uint8_t>(r * 255),
+        static_cast<uint8_t>(g * 255),
+        static_cast<uint8_t>(b * 255)
+    );
+}
+
+//------------------------------------------------------------------------
+void PolyLightOrgan::render(FlaschenTaschenClient& client) {
+    int width = client.getWidth();
+    int height = client.getHeight();
+
+    // Clear to black
+    client.clear(Color::Black());
+
+    // Draw each active key as a vertical line
+    for (int note = MIN_NOTE; note <= MAX_NOTE; ++note) {
+        if (!keys_[note].active) continue;
+
+        int startX, endX;
+        getNotePixelRange(note, width, startX, endX);
+
+        // Determine color based on mode
+        Color c;
+        if (rainbowMode_) {
+            // Hue based on note position (red at low, violet at high)
+            float hue = static_cast<float>(note - MIN_NOTE) / NUM_KEYS;
+            c = hsvToRgb(hue, 1.0f, keys_[note].brightness);
+        } else {
+            // Use base color with brightness
+            c = Color(
+                static_cast<uint8_t>(baseR_ * keys_[note].brightness),
+                static_cast<uint8_t>(baseG_ * keys_[note].brightness),
+                static_cast<uint8_t>(baseB_ * keys_[note].brightness)
+            );
+        }
+
+        // Draw vertical line for this key
+        for (int x = startX; x < endX; ++x) {
+            for (int y = 0; y < height; ++y) {
+                client.setPixel(x, y, c);
+            }
+        }
+    }
+}
+
+//------------------------------------------------------------------------
+bool PolyLightOrgan::hasActiveNotes() const {
+    for (int i = 0; i < 128; ++i) {
+        if (keys_[i].active) return true;
+    }
+    return false;
+}
+
+//------------------------------------------------------------------------
+void PolyLightOrgan::allNotesOff() {
+    for (auto& key : keys_) {
+        key.active = false;
+        key.brightness = 0.0f;
+    }
+}
+
+//------------------------------------------------------------------------
+// VisualEffects implementation
+//------------------------------------------------------------------------
 VisualEffects::VisualEffects()
     : rng_(std::random_device{}())
 {

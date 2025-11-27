@@ -8,8 +8,65 @@
 #include "MappingConfig.h"
 #include <chrono>
 #include <random>
+#include <array>
 
 namespace FlaschenTaschen {
+
+//------------------------------------------------------------------------
+// PolyLightOrgan - polyphonic light organ mode
+// Maps 61 keys (C1=24 to C6=84) across 128 pixel columns
+// Each key lights up ~2 pixel wide vertical line
+// Velocity/aftertouch controls brightness per key
+//------------------------------------------------------------------------
+class PolyLightOrgan {
+public:
+    static constexpr int MIN_NOTE = 24;   // C1
+    static constexpr int MAX_NOTE = 84;   // C6
+    static constexpr int NUM_KEYS = 61;   // 5 octaves
+
+    PolyLightOrgan();
+
+    // Note on with velocity (0-127)
+    void noteOn(int midiNote, int velocity);
+
+    // Note off
+    void noteOff(int midiNote);
+
+    // Update aftertouch for a note (-1 for channel aftertouch = all notes)
+    void aftertouch(int midiNote, int pressure);
+
+    // Set base color (can be changed dynamically)
+    void setColor(uint8_t r, uint8_t g, uint8_t b);
+
+    // Set rainbow mode (each key has different hue)
+    void setRainbowMode(bool enabled) { rainbowMode_ = enabled; }
+    bool isRainbowMode() const { return rainbowMode_; }
+
+    // Render to display
+    void render(FlaschenTaschenClient& client);
+
+    // Check if any notes are active
+    bool hasActiveNotes() const;
+
+    // Clear all notes
+    void allNotesOff();
+
+private:
+    struct KeyState {
+        bool active = false;
+        float brightness = 0.0f;  // 0.0 - 1.0
+    };
+
+    std::array<KeyState, 128> keys_;  // Full MIDI range for safety
+    uint8_t baseR_ = 255, baseG_ = 255, baseB_ = 255;
+    bool rainbowMode_ = true;  // Default to rainbow
+
+    // Get pixel column range for a MIDI note
+    void getNotePixelRange(int midiNote, int displayWidth, int& startX, int& endX) const;
+
+    // HSV to RGB helper
+    static Color hsvToRgb(float h, float s, float v);
+};
 
 //------------------------------------------------------------------------
 // VisualEffects - renders visual effects on FlaschenTaschen display
