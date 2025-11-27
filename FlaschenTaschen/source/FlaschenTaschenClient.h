@@ -85,8 +85,8 @@ public:
     const std::string& getLastError() const { return lastError_; }
 
 private:
-    int width_ = 45;
-    int height_ = 35;
+    int width_ = 128;
+    int height_ = 64;
     int offsetX_ = 0;
     int offsetY_ = 0;
     int layer_ = 0;

@@ -2,13 +2,10 @@
 <Mapping>
     <Global>
         <Server ip="127.0.0.1" port="1337"/>
-        <Display width="45" height="35"
-                 colorR="255" colorG="255" colorB="0"
-                 bgColorR="0" bgColorG="0" bgColorB="0"/>
+        <Display width="128" height="64" colorR="255" colorG="255" colorB="0"/>
         <TTS voice="en" rate="175" pitch="50" volume="100"/>
     </Global>
     <Syllables>
-        <!-- Home row: the strato jets are the next hot shit -->
         <S id="0" text="the"/>
         <S id="1" text="strato"/>
         <S id="2" text="jets"/>
@@ -19,14 +16,13 @@
         <S id="7" text="shit"/>
     </Syllables>
     <Notes>
-        <!-- Keys A,S,D,F,G,H,J,K map to C major scale C2-C3 -->
-        <Note midi="36" syllable_id="0"/>   <!-- A -> the -->
-        <Note midi="38" syllable_id="1"/>   <!-- S -> strato -->
-        <Note midi="40" syllable_id="2"/>   <!-- D -> jets -->
-        <Note midi="41" syllable_id="3"/>   <!-- F -> are -->
-        <Note midi="43" syllable_id="4"/>   <!-- G -> the -->
-        <Note midi="45" syllable_id="5"/>   <!-- H -> next -->
-        <Note midi="47" syllable_id="6"/>   <!-- J -> hot -->
-        <Note midi="48" syllable_id="7"/>   <!-- K -> shit -->
+        <Note midi="36" syllable_id="0"/>
+        <Note midi="38" syllable_id="1"/>
+        <Note midi="40" syllable_id="2"/>
+        <Note midi="41" syllable_id="3"/>
+        <Note midi="43" syllable_id="4"/>
+        <Note midi="45" syllable_id="5"/>
+        <Note midi="47" syllable_id="6"/>
+        <Note midi="48" syllable_id="7"/>
     </Notes>
 </Mapping>

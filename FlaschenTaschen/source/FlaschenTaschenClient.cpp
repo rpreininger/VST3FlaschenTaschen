@@ -5,6 +5,7 @@
 #include "FlaschenTaschenClient.h"
 #include <sstream>
 #include <cstring>
+#include <iostream>
 
 namespace FlaschenTaschen {
 
@@ -140,6 +141,13 @@ Color FlaschenTaschenClient::getPixel(int x, int y) const {
 std::string FlaschenTaschenClient::buildPPMPacket() const {
     std::ostringstream packet;
 
+    // Debug: confirm horizontal flip is active
+    static bool firstCall = true;
+    if (firstCall) {
+        std::cout << "    [DEBUG] Horizontal flip ENABLED" << std::endl;
+        firstCall = false;
+    }
+
     // PPM P6 header
     packet << "P6\n";
     packet << width_ << " " << height_ << "\n";
@@ -155,11 +163,23 @@ std::string FlaschenTaschenClient::buildPPMPacket() const {
     // Get header as string
     std::string header = packet.str();
 
+    // Build flipped buffer (horizontal flip - mirror left/right)
+    std::vector<uint8_t> flippedBuffer(frameBuffer_.size());
+    for (int y = 0; y < height_; ++y) {
+        for (int x = 0; x < width_; ++x) {
+            int srcIndex = (y * width_ + x) * 3;
+            int dstIndex = (y * width_ + (width_ - 1 - x)) * 3;
+            flippedBuffer[dstIndex] = frameBuffer_[srcIndex];
+            flippedBuffer[dstIndex + 1] = frameBuffer_[srcIndex + 1];
+            flippedBuffer[dstIndex + 2] = frameBuffer_[srcIndex + 2];
+        }
+    }
+
     // Build complete packet: header + binary pixel data
     std::string result;
-    result.reserve(header.size() + frameBuffer_.size());
+    result.reserve(header.size() + flippedBuffer.size());
     result = header;
-    result.append(reinterpret_cast<const char*>(frameBuffer_.data()), frameBuffer_.size());
+    result.append(reinterpret_cast<const char*>(flippedBuffer.data()), flippedBuffer.size());
 
     return result;
 }

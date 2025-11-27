@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
             <Mapping>
                 <Global>
                     <Server ip="127.0.0.1" port="1337"/>
-                    <Display width="45" height="35" colorR="255" colorG="255" colorB="0"/>
+                    <Display width="128" height="64" colorR="255" colorG="255" colorB="0"/>
                     <TTS voice="en" rate="175" pitch="50" volume="100"/>
                 </Global>
                 <Syllables>
