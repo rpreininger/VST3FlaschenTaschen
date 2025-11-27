@@ -115,15 +115,41 @@ void MidiInput::handleMidiMessage(DWORD_PTR dwParam1) {
     BYTE messageType = status & 0xF0;
     BYTE channel = status & 0x0F;
 
-    if (noteCallback_) {
-        if (messageType == 0x90 && data2 > 0) {
-            // Note On
-            noteCallback_(channel, data1, data2);
-        }
-        else if (messageType == 0x80 || (messageType == 0x90 && data2 == 0)) {
-            // Note Off
-            noteCallback_(channel, data1, 0);
-        }
+    switch (messageType) {
+        case 0x90:  // Note On
+            if (noteCallback_) {
+                if (data2 > 0) {
+                    noteCallback_(channel, data1, data2);
+                } else {
+                    // Velocity 0 = Note Off
+                    noteCallback_(channel, data1, 0);
+                }
+            }
+            break;
+
+        case 0x80:  // Note Off
+            if (noteCallback_) {
+                noteCallback_(channel, data1, 0);
+            }
+            break;
+
+        case 0xA0:  // Polyphonic Aftertouch (per-note)
+            if (aftertouchCallback_) {
+                aftertouchCallback_(channel, data1, data2);  // note, pressure
+            }
+            break;
+
+        case 0xD0:  // Channel Aftertouch (all notes)
+            if (aftertouchCallback_) {
+                aftertouchCallback_(channel, -1, data1);  // -1 = all notes, pressure
+            }
+            break;
+
+        case 0xB0:  // Control Change
+            if (ccCallback_) {
+                ccCallback_(channel, data1, data2);  // controller, value
+            }
+            break;
     }
 }
 

@@ -30,6 +30,12 @@ public:
     // MIDI callback: receives channel, note, velocity (velocity 0 = note off)
     using NoteCallback = std::function<void(int channel, int note, int velocity)>;
 
+    // Aftertouch callback: receives channel, note (for poly) or -1 (for channel), pressure
+    using AftertouchCallback = std::function<void(int channel, int note, int pressure)>;
+
+    // Control change callback: receives channel, controller number, value
+    using ControlChangeCallback = std::function<void(int channel, int controller, int value)>;
+
     MidiInput();
     ~MidiInput();
 
@@ -45,8 +51,10 @@ public:
     // Check if open
     bool isOpen() const { return midiIn_ != nullptr; }
 
-    // Set note callback
+    // Set callbacks
     void setNoteCallback(NoteCallback callback) { noteCallback_ = callback; }
+    void setAftertouchCallback(AftertouchCallback callback) { aftertouchCallback_ = callback; }
+    void setControlChangeCallback(ControlChangeCallback callback) { ccCallback_ = callback; }
 
     // Get last error
     const std::string& getLastError() const { return lastError_; }
@@ -61,6 +69,8 @@ private:
 
     HMIDIIN midiIn_ = nullptr;
     NoteCallback noteCallback_;
+    AftertouchCallback aftertouchCallback_;
+    ControlChangeCallback ccCallback_;
     std::string lastError_;
     std::string deviceName_;
 };

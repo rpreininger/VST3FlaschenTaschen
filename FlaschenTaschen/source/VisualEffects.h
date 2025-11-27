@@ -22,11 +22,18 @@ public:
     // Start playing an effect
     void startEffect(const Effect& effect);
 
+    // Start playing an effect with initial brightness (0-127 velocity mapped to 0.0-1.0)
+    void startEffect(const Effect& effect, int velocity);
+
     // Stop current effect
     void stopEffect();
 
     // Check if an effect is currently playing
     bool isPlaying() const { return isPlaying_; }
+
+    // Set brightness (0.0 - 1.0) - can be updated in real-time via aftertouch
+    void setBrightness(float brightness);
+    float getBrightness() const { return brightness_; }
 
     // Update and render current effect
     // Returns true if effect is still active, false if finished
@@ -49,8 +56,12 @@ public:
 private:
     Effect currentEffect_;
     bool isPlaying_ = false;
+    float brightness_ = 1.0f;  // 0.0 - 1.0, controlled by velocity/aftertouch
     std::chrono::steady_clock::time_point startTime_;
     std::mt19937 rng_;
+
+    // Apply brightness to a color
+    Color applyBrightness(const Color& c) const;
 
     // Animated effect renderers
     void renderPulse(FlaschenTaschenClient& client, float t);
@@ -59,6 +70,13 @@ private:
     void renderWave(FlaschenTaschenClient& client, float t);
     void renderSparkle(FlaschenTaschenClient& client, float t);
     void renderAnimatedRainbow(FlaschenTaschenClient& client, float t);
+
+    // Non-static versions that apply brightness (for use in update())
+    void renderColorRampWithBrightness(FlaschenTaschenClient& client,
+                                       uint8_t r1, uint8_t g1, uint8_t b1,
+                                       uint8_t r2, uint8_t g2, uint8_t b2,
+                                       RampDirection direction);
+    void renderAnimatedRainbowWithBrightness(FlaschenTaschenClient& client, float t);
 
     // Helper: interpolate between two colors
     static Color lerpColor(const Color& c1, const Color& c2, float t);

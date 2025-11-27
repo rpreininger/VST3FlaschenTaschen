@@ -126,7 +126,7 @@ int keyToMidiNote(int key) {
 //------------------------------------------------------------------------
 // Handle effect trigger
 //------------------------------------------------------------------------
-void triggerEffect(int midiNote, const Effect* effect) {
+void triggerEffect(int midiNote, const Effect* effect, int velocity = 127) {
     std::cout << "  Note " << midiNote << " -> Effect: \"" << effect->name << "\" (";
 
     switch (effect->type) {
@@ -140,22 +140,23 @@ void triggerEffect(int midiNote, const Effect* effect) {
         case EffectType::Sparkle: std::cout << "sparkle"; break;
         default: std::cout << "unknown"; break;
     }
-    std::cout << ")" << std::endl;
+    std::cout << ") velocity=" << velocity << std::endl;
 
     if (g_ftClient.isConnected() && g_effectsEnabled) {
-        g_visualEffects.startEffect(*effect);
-        std::cout << "    -> Effect started (duration: " << effect->durationMs << "ms)" << std::endl;
+        g_visualEffects.startEffect(*effect, velocity);
+        std::cout << "    -> Effect started (duration: " << effect->durationMs << "ms, brightness: "
+                  << (velocity * 100 / 127) << "%)" << std::endl;
     }
 }
 
 //------------------------------------------------------------------------
 // Handle note trigger
 //------------------------------------------------------------------------
-void triggerNote(int midiNote) {
+void triggerNote(int midiNote, int velocity = 127) {
     // First check if this note triggers an effect
     const Effect* effect = g_config.getEffectForNote(midiNote);
     if (effect) {
-        triggerEffect(midiNote, effect);
+        triggerEffect(midiNote, effect, velocity);
         return;
     }
 
@@ -456,8 +457,17 @@ int main(int argc, char* argv[]) {
             g_midiInput.setNoteCallback([](int channel, int note, int velocity) {
                 (void)channel;
                 if (velocity > 0) {
-                    // Note On - trigger the syllable
-                    triggerNote(note);
+                    // Note On - trigger the syllable/effect with velocity
+                    triggerNote(note, velocity);
+                }
+            });
+
+            // Set up aftertouch callback for real-time brightness control
+            g_midiInput.setAftertouchCallback([](int channel, int note, int pressure) {
+                (void)channel;
+                (void)note;  // For now, apply to current effect regardless of note
+                if (g_visualEffects.isPlaying()) {
+                    g_visualEffects.setBrightness(static_cast<float>(pressure) / 127.0f);
                 }
             });
         } else {

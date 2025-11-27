@@ -22,7 +22,31 @@ VisualEffects::VisualEffects()
 void VisualEffects::startEffect(const Effect& effect) {
     currentEffect_ = effect;
     isPlaying_ = true;
+    brightness_ = 1.0f;  // Default full brightness
     startTime_ = std::chrono::steady_clock::now();
+}
+
+//------------------------------------------------------------------------
+void VisualEffects::startEffect(const Effect& effect, int velocity) {
+    currentEffect_ = effect;
+    isPlaying_ = true;
+    // Map velocity (0-127) to brightness (0.0-1.0)
+    brightness_ = static_cast<float>(velocity) / 127.0f;
+    startTime_ = std::chrono::steady_clock::now();
+}
+
+//------------------------------------------------------------------------
+void VisualEffects::setBrightness(float brightness) {
+    brightness_ = std::max(0.0f, std::min(1.0f, brightness));
+}
+
+//------------------------------------------------------------------------
+Color VisualEffects::applyBrightness(const Color& c) const {
+    return Color(
+        static_cast<uint8_t>(c.r * brightness_),
+        static_cast<uint8_t>(c.g * brightness_),
+        static_cast<uint8_t>(c.b * brightness_)
+    );
 }
 
 //------------------------------------------------------------------------
@@ -56,15 +80,19 @@ bool VisualEffects::update(FlaschenTaschenClient& client) {
 
     // Render based on effect type
     switch (currentEffect_.type) {
-        case EffectType::SolidColor:
-            renderSolidColor(client,
+        case EffectType::SolidColor: {
+            // Apply brightness for solid color
+            Color c = applyBrightness(Color(
                 currentEffect_.color1R,
                 currentEffect_.color1G,
-                currentEffect_.color1B);
+                currentEffect_.color1B));
+            client.clear(c);
             break;
+        }
 
         case EffectType::ColorRamp:
-            renderColorRamp(client,
+            // ColorRamp handled by renderColorRamp (brightness applied per-pixel below)
+            renderColorRampWithBrightness(client,
                 currentEffect_.color1R, currentEffect_.color1G, currentEffect_.color1B,
                 currentEffect_.color2R, currentEffect_.color2G, currentEffect_.color2B,
                 currentEffect_.rampDirection);
@@ -75,7 +103,7 @@ bool VisualEffects::update(FlaschenTaschenClient& client) {
             break;
 
         case EffectType::Rainbow:
-            renderAnimatedRainbow(client, t);
+            renderAnimatedRainbowWithBrightness(client, t);
             break;
 
         case EffectType::Flash:
@@ -172,18 +200,88 @@ void VisualEffects::renderRainbow(FlaschenTaschenClient& client, float phase) {
 }
 
 //------------------------------------------------------------------------
+// Non-static versions that apply brightness (for use in update())
+//------------------------------------------------------------------------
+void VisualEffects::renderColorRampWithBrightness(FlaschenTaschenClient& client,
+                                     uint8_t r1, uint8_t g1, uint8_t b1,
+                                     uint8_t r2, uint8_t g2, uint8_t b2,
+                                     RampDirection direction) {
+    int width = client.getWidth();
+    int height = client.getHeight();
+    Color c1(r1, g1, b1);
+    Color c2(r2, g2, b2);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float t = 0.0f;
+
+            switch (direction) {
+                case RampDirection::Horizontal:
+                    t = static_cast<float>(x) / (width - 1);
+                    break;
+
+                case RampDirection::Vertical:
+                    t = static_cast<float>(y) / (height - 1);
+                    break;
+
+                case RampDirection::DiagonalDown:
+                    t = static_cast<float>(x + y) / (width + height - 2);
+                    break;
+
+                case RampDirection::DiagonalUp:
+                    t = static_cast<float>(x + (height - 1 - y)) / (width + height - 2);
+                    break;
+
+                case RampDirection::Radial: {
+                    float cx = width / 2.0f;
+                    float cy = height / 2.0f;
+                    float maxDist = std::sqrt(cx * cx + cy * cy);
+                    float dx = x - cx;
+                    float dy = y - cy;
+                    float dist = std::sqrt(dx * dx + dy * dy);
+                    t = dist / maxDist;
+                    break;
+                }
+            }
+
+            Color c = applyBrightness(lerpColor(c1, c2, t));
+            client.setPixel(x, y, c);
+        }
+    }
+}
+
+//------------------------------------------------------------------------
+void VisualEffects::renderAnimatedRainbowWithBrightness(FlaschenTaschenClient& client, float t) {
+    float speed = currentEffect_.speed / 50.0f;
+    int elapsed = getElapsedMs();
+    float phase = std::fmod(elapsed * speed * 0.001f, 1.0f);
+
+    int width = client.getWidth();
+    int height = client.getHeight();
+
+    for (int x = 0; x < width; ++x) {
+        float hue = std::fmod(phase + static_cast<float>(x) / width, 1.0f);
+        Color c = applyBrightness(hsvToRgb(hue, 1.0f, 1.0f));
+
+        for (int y = 0; y < height; ++y) {
+            client.setPixel(x, y, c);
+        }
+    }
+}
+
+//------------------------------------------------------------------------
 void VisualEffects::renderPulse(FlaschenTaschenClient& client, float t) {
     // Pulse uses sine wave for smooth fade in/out
     int elapsed = getElapsedMs();
     float periodSec = currentEffect_.periodMs / 1000.0f;
     float phase = std::fmod(elapsed / 1000.0f, periodSec) / periodSec;
-    float brightness = 0.5f + 0.5f * std::sin(phase * 2.0f * static_cast<float>(M_PI));
+    float pulseBrightness = 0.5f + 0.5f * std::sin(phase * 2.0f * static_cast<float>(M_PI));
 
-    brightness *= currentEffect_.intensity;
+    pulseBrightness *= currentEffect_.intensity * brightness_;  // Apply velocity brightness
 
-    uint8_t r = static_cast<uint8_t>(currentEffect_.color1R * brightness);
-    uint8_t g = static_cast<uint8_t>(currentEffect_.color1G * brightness);
-    uint8_t b = static_cast<uint8_t>(currentEffect_.color1B * brightness);
+    uint8_t r = static_cast<uint8_t>(currentEffect_.color1R * pulseBrightness);
+    uint8_t g = static_cast<uint8_t>(currentEffect_.color1G * pulseBrightness);
+    uint8_t b = static_cast<uint8_t>(currentEffect_.color1B * pulseBrightness);
 
     client.clear(Color(r, g, b));
 }
@@ -191,12 +289,12 @@ void VisualEffects::renderPulse(FlaschenTaschenClient& client, float t) {
 //------------------------------------------------------------------------
 void VisualEffects::renderFlash(FlaschenTaschenClient& client, float t) {
     // Quick flash that fades out
-    float brightness = (1.0f - t) * currentEffect_.intensity;
-    brightness = std::max(0.0f, brightness);
+    float flashBrightness = (1.0f - t) * currentEffect_.intensity * brightness_;  // Apply velocity brightness
+    flashBrightness = std::max(0.0f, flashBrightness);
 
-    uint8_t r = static_cast<uint8_t>(currentEffect_.color1R * brightness);
-    uint8_t g = static_cast<uint8_t>(currentEffect_.color1G * brightness);
-    uint8_t b = static_cast<uint8_t>(currentEffect_.color1B * brightness);
+    uint8_t r = static_cast<uint8_t>(currentEffect_.color1R * flashBrightness);
+    uint8_t g = static_cast<uint8_t>(currentEffect_.color1G * flashBrightness);
+    uint8_t b = static_cast<uint8_t>(currentEffect_.color1B * flashBrightness);
 
     client.clear(Color(r, g, b));
 }
@@ -208,17 +306,17 @@ void VisualEffects::renderStrobe(FlaschenTaschenClient& client, float t) {
     bool on = ((elapsed / periodMs) % 2) == 0;
 
     if (on) {
-        client.clear(Color(
+        client.clear(applyBrightness(Color(
             currentEffect_.color1R,
             currentEffect_.color1G,
             currentEffect_.color1B
-        ));
+        )));
     } else {
-        client.clear(Color(
+        client.clear(applyBrightness(Color(
             currentEffect_.color2R,
             currentEffect_.color2G,
             currentEffect_.color2B
-        ));
+        )));
     }
 }
 
@@ -238,7 +336,7 @@ void VisualEffects::renderWave(FlaschenTaschenClient& client, float t) {
         float xPhase = static_cast<float>(x) / width * 2.0f * static_cast<float>(M_PI);
         float wave = 0.5f + 0.5f * std::sin(xPhase + wavePhase);
 
-        Color c = lerpColor(c1, c2, wave);
+        Color c = applyBrightness(lerpColor(c1, c2, wave));
 
         for (int y = 0; y < height; ++y) {
             client.setPixel(x, y, c);
@@ -251,12 +349,12 @@ void VisualEffects::renderSparkle(FlaschenTaschenClient& client, float t) {
     int width = client.getWidth();
     int height = client.getHeight();
 
-    // Clear with background color
-    client.clear(Color(
+    // Clear with background color (also affected by brightness)
+    client.clear(applyBrightness(Color(
         currentEffect_.color2R,
         currentEffect_.color2G,
         currentEffect_.color2B
-    ));
+    )));
 
     // Add random sparkles
     int numSparkles = static_cast<int>((width * height) * 0.1f * currentEffect_.intensity);
@@ -267,7 +365,7 @@ void VisualEffects::renderSparkle(FlaschenTaschenClient& client, float t) {
     for (int i = 0; i < numSparkles; ++i) {
         int x = xDist(rng_);
         int y = yDist(rng_);
-        float bright = brightDist(rng_);
+        float bright = brightDist(rng_) * brightness_;  // Apply velocity brightness
 
         uint8_t r = static_cast<uint8_t>(currentEffect_.color1R * bright);
         uint8_t g = static_cast<uint8_t>(currentEffect_.color1G * bright);
