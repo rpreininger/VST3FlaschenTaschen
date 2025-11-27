@@ -39,6 +39,8 @@
 #include "../../FlaschenTaschen/source/ESpeakSynthesizer.cpp"
 #include "../../FlaschenTaschen/source/WorldPitchShifter.h"
 #include "../../FlaschenTaschen/source/WorldPitchShifter.cpp"
+#include "../../FlaschenTaschen/source/VisualEffects.h"
+#include "../../FlaschenTaschen/source/VisualEffects.cpp"
 
 using namespace FlaschenTaschen;
 
@@ -55,8 +57,10 @@ BitmapFont g_font;
 ESpeakSynthesizer g_tts;
 WorldPitchShifter g_pitchShifter;
 MidiInput g_midiInput;
+VisualEffects g_visualEffects;
 bool g_pitchShiftEnabled = true;  // Enable/disable pitch shifting
 int g_octaveOffset = 0;           // Octave shift (-3 to +3)
+bool g_effectsEnabled = true;     // Enable/disable visual effects
 
 // Sample rate conversion
 int g_ttsSampleRate = 22050;  // eSpeak default
@@ -120,9 +124,42 @@ int keyToMidiNote(int key) {
 }
 
 //------------------------------------------------------------------------
+// Handle effect trigger
+//------------------------------------------------------------------------
+void triggerEffect(int midiNote, const Effect* effect) {
+    std::cout << "  Note " << midiNote << " -> Effect: \"" << effect->name << "\" (";
+
+    switch (effect->type) {
+        case EffectType::SolidColor: std::cout << "solid"; break;
+        case EffectType::ColorRamp: std::cout << "ramp"; break;
+        case EffectType::Pulse: std::cout << "pulse"; break;
+        case EffectType::Rainbow: std::cout << "rainbow"; break;
+        case EffectType::Flash: std::cout << "flash"; break;
+        case EffectType::Strobe: std::cout << "strobe"; break;
+        case EffectType::Wave: std::cout << "wave"; break;
+        case EffectType::Sparkle: std::cout << "sparkle"; break;
+        default: std::cout << "unknown"; break;
+    }
+    std::cout << ")" << std::endl;
+
+    if (g_ftClient.isConnected() && g_effectsEnabled) {
+        g_visualEffects.startEffect(*effect);
+        std::cout << "    -> Effect started (duration: " << effect->durationMs << "ms)" << std::endl;
+    }
+}
+
+//------------------------------------------------------------------------
 // Handle note trigger
 //------------------------------------------------------------------------
 void triggerNote(int midiNote) {
+    // First check if this note triggers an effect
+    const Effect* effect = g_config.getEffectForNote(midiNote);
+    if (effect) {
+        triggerEffect(midiNote, effect);
+        return;
+    }
+
+    // Otherwise, check for syllable mapping
     std::string syllable = g_config.getSyllableForNote(midiNote);
 
     if (syllable.empty()) {
@@ -140,6 +177,9 @@ void triggerNote(int midiNote) {
 
     // Send to FlaschenTaschen display
     if (g_ftClient.isConnected()) {
+        // Stop any running effect when showing text
+        g_visualEffects.stopEffect();
+
         const auto& display = g_config.getDisplayConfig();
         Color textColor(display.colorR, display.colorG, display.colorB);
         Color bgColor(display.bgColorR, display.bgColorG, display.bgColorB);
@@ -263,6 +303,7 @@ void printUsage() {
     std::cout << "========================================\n";
     std::cout << "  FlaschenTaschen Standalone Test\n";
     std::cout << "  with World Vocoder Pitch Shifting\n";
+    std::cout << "  and Visual Effects\n";
     std::cout << "========================================\n";
     std::cout << "\n";
     std::cout << "Keyboard Controls (Home Row = C Major Scale):\n";
@@ -271,6 +312,7 @@ void printUsage() {
     std::cout << "  W/+  -> Octave UP\n";
     std::cout << "  Q/-  -> Octave DOWN\n";
     std::cout << "  P    -> Toggle pitch shifting ON/OFF\n";
+    std::cout << "  E    -> Toggle visual effects ON/OFF\n";
     std::cout << "  T    -> Test tone (440 Hz)\n";
     std::cout << "  ESC  -> Quit\n";
     std::cout << "\n";
@@ -464,13 +506,37 @@ int main(int argc, char* argv[]) {
     printUsage();
 
     // Show mapped notes
-    std::cout << "Mapped Notes:\n";
+    std::cout << "Mapped Notes (Syllables):\n";
     for (const auto& nm : g_config.getNoteMappings()) {
         const auto* syl = g_config.getSyllableById(nm.syllableId);
         if (syl) {
             std::cout << "  MIDI " << nm.midiNote << " -> \"" << syl->text << "\"\n";
         }
     }
+
+    // Show mapped effects
+    if (!g_config.getEffectMappings().empty()) {
+        std::cout << "\nMapped Effects:\n";
+        for (const auto& em : g_config.getEffectMappings()) {
+            const auto* eff = g_config.getEffectById(em.effectId);
+            if (eff) {
+                std::cout << "  MIDI " << em.midiNote << " -> \"" << eff->name << "\" (";
+                switch (eff->type) {
+                    case EffectType::SolidColor: std::cout << "solid"; break;
+                    case EffectType::ColorRamp: std::cout << "ramp"; break;
+                    case EffectType::Pulse: std::cout << "pulse"; break;
+                    case EffectType::Rainbow: std::cout << "rainbow"; break;
+                    case EffectType::Flash: std::cout << "flash"; break;
+                    case EffectType::Strobe: std::cout << "strobe"; break;
+                    case EffectType::Wave: std::cout << "wave"; break;
+                    case EffectType::Sparkle: std::cout << "sparkle"; break;
+                    default: std::cout << "unknown"; break;
+                }
+                std::cout << ")\n";
+            }
+        }
+    }
+
     std::cout << "\nPress keys to trigger notes (ESC to quit):\n\n";
 
     // Main loop - keyboard input
@@ -494,6 +560,13 @@ int main(int argc, char* argv[]) {
             if (key == 'p' || key == 'P') {
                 g_pitchShiftEnabled = !g_pitchShiftEnabled;
                 std::cout << "  Pitch shifting: " << (g_pitchShiftEnabled ? "ON" : "OFF") << std::endl;
+                continue;
+            }
+
+            // Toggle visual effects with 'E'
+            if (key == 'e' || key == 'E') {
+                g_effectsEnabled = !g_effectsEnabled;
+                std::cout << "  Visual effects: " << (g_effectsEnabled ? "ON" : "OFF") << std::endl;
                 continue;
             }
 
@@ -543,6 +616,13 @@ int main(int argc, char* argv[]) {
             int midiNote = keyToMidiNote(key);
             if (midiNote >= 0) {
                 triggerNote(midiNote);
+            }
+        }
+
+        // Update visual effects if running
+        if (g_ftClient.isConnected() && g_visualEffects.isPlaying()) {
+            if (g_visualEffects.update(g_ftClient)) {
+                g_ftClient.send();
             }
         }
 

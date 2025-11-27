@@ -110,7 +110,10 @@ bool MappingConfig::loadFromFile(const std::string& filePath) {
 bool MappingConfig::loadFromString(const std::string& xmlContent) {
     syllables_.clear();
     noteMappings_.clear();
+    effects_.clear();
+    effectMappings_.clear();
     noteToSyllableMap_.clear();
+    noteToEffectMap_.clear();
     isValid_ = false;
 
     if (!parseXml(xmlContent)) {
@@ -118,8 +121,33 @@ bool MappingConfig::loadFromString(const std::string& xmlContent) {
     }
 
     buildNoteToSyllableMap();
+    buildNoteToEffectMap();
     isValid_ = true;
     return true;
+}
+
+//------------------------------------------------------------------------
+// Effect helper functions
+//------------------------------------------------------------------------
+EffectType Effect::typeFromString(const std::string& str) {
+    if (str == "solid" || str == "SolidColor") return EffectType::SolidColor;
+    if (str == "ramp" || str == "ColorRamp") return EffectType::ColorRamp;
+    if (str == "pulse" || str == "Pulse") return EffectType::Pulse;
+    if (str == "rainbow" || str == "Rainbow") return EffectType::Rainbow;
+    if (str == "flash" || str == "Flash") return EffectType::Flash;
+    if (str == "strobe" || str == "Strobe") return EffectType::Strobe;
+    if (str == "wave" || str == "Wave") return EffectType::Wave;
+    if (str == "sparkle" || str == "Sparkle") return EffectType::Sparkle;
+    return EffectType::None;
+}
+
+RampDirection Effect::directionFromString(const std::string& str) {
+    if (str == "horizontal" || str == "h") return RampDirection::Horizontal;
+    if (str == "vertical" || str == "v") return RampDirection::Vertical;
+    if (str == "diagonal_down" || str == "dd") return RampDirection::DiagonalDown;
+    if (str == "diagonal_up" || str == "du") return RampDirection::DiagonalUp;
+    if (str == "radial" || str == "r") return RampDirection::Radial;
+    return RampDirection::Horizontal;
 }
 
 bool MappingConfig::parseXml(const std::string& xmlContent) {
@@ -216,13 +244,74 @@ bool MappingConfig::parseXml(const std::string& xmlContent) {
         }
     }
 
-    if (syllables_.empty()) {
-        lastError_ = "No syllables found in configuration";
+    // Parse Effects section
+    std::string effectsSection = findTagContent(xmlContent, "Effects");
+    if (!effectsSection.empty()) {
+        auto effectTags = findAllTags(effectsSection, "E");
+        for (const auto& tag : effectTags) {
+            Effect e;
+            e.id = getIntAttribute(tag, "id", -1);
+            e.name = getAttribute(tag, "name");
+            e.type = Effect::typeFromString(getAttribute(tag, "type"));
+
+            // Primary color
+            e.color1R = getUint8Attribute(tag, "r", 255);
+            e.color1G = getUint8Attribute(tag, "g", 255);
+            e.color1B = getUint8Attribute(tag, "b", 255);
+
+            // Secondary color (for ramps, etc.)
+            e.color2R = getUint8Attribute(tag, "r2", 0);
+            e.color2G = getUint8Attribute(tag, "g2", 0);
+            e.color2B = getUint8Attribute(tag, "b2", 0);
+
+            // Timing
+            e.durationMs = getIntAttribute(tag, "duration", 500);
+            e.periodMs = getIntAttribute(tag, "period", 100);
+
+            // Ramp direction
+            std::string dirStr = getAttribute(tag, "direction");
+            if (!dirStr.empty()) {
+                e.rampDirection = Effect::directionFromString(dirStr);
+            }
+
+            // Other parameters
+            std::string intensityStr = getAttribute(tag, "intensity");
+            if (!intensityStr.empty()) {
+                try {
+                    e.intensity = std::stof(intensityStr);
+                } catch (...) {}
+            }
+            e.speed = getIntAttribute(tag, "speed", 50);
+
+            if (e.id >= 0 && e.type != EffectType::None) {
+                effects_.push_back(e);
+            }
+        }
+    }
+
+    // Parse EffectNotes section (MIDI note -> effect mappings)
+    std::string effectNotesSection = findTagContent(xmlContent, "EffectNotes");
+    if (!effectNotesSection.empty()) {
+        auto effectNoteTags = findAllTags(effectNotesSection, "EN");
+        for (const auto& tag : effectNoteTags) {
+            EffectMapping em;
+            em.midiNote = getIntAttribute(tag, "midi", -1);
+            em.effectId = getIntAttribute(tag, "effect_id", -1);
+
+            if (em.midiNote >= 0 && em.effectId >= 0) {
+                effectMappings_.push_back(em);
+            }
+        }
+    }
+
+    // Allow configuration with only effects (no syllables required)
+    if (syllables_.empty() && effects_.empty()) {
+        lastError_ = "No syllables or effects found in configuration";
         return false;
     }
 
-    if (noteMappings_.empty()) {
-        lastError_ = "No note mappings found in configuration";
+    if (noteMappings_.empty() && effectMappings_.empty()) {
+        lastError_ = "No note mappings or effect mappings found in configuration";
         return false;
     }
 
@@ -233,6 +322,13 @@ void MappingConfig::buildNoteToSyllableMap() {
     noteToSyllableMap_.clear();
     for (const auto& nm : noteMappings_) {
         noteToSyllableMap_[nm.midiNote] = nm.syllableId;
+    }
+}
+
+void MappingConfig::buildNoteToEffectMap() {
+    noteToEffectMap_.clear();
+    for (const auto& em : effectMappings_) {
+        noteToEffectMap_[em.midiNote] = em.effectId;
     }
 }
 
@@ -253,6 +349,27 @@ const Syllable* MappingConfig::getSyllableById(int id) const {
         }
     }
     return nullptr;
+}
+
+const Effect* MappingConfig::getEffectForNote(int midiNote) const {
+    auto it = noteToEffectMap_.find(midiNote);
+    if (it == noteToEffectMap_.end()) {
+        return nullptr;
+    }
+    return getEffectById(it->second);
+}
+
+const Effect* MappingConfig::getEffectById(int id) const {
+    for (const auto& e : effects_) {
+        if (e.id == id) {
+            return &e;
+        }
+    }
+    return nullptr;
+}
+
+bool MappingConfig::hasEffectForNote(int midiNote) const {
+    return noteToEffectMap_.find(midiNote) != noteToEffectMap_.end();
 }
 
 //------------------------------------------------------------------------

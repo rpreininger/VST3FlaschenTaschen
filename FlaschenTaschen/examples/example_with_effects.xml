@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    FlaschenTaschen Example Configuration with Visual Effects
+
+    This file demonstrates how to map MIDI notes to:
+    - Syllables (text displayed on LED matrix with TTS)
+    - Visual effects (color animations on LED matrix)
+
+    Effect types:
+    - solid: Fill with solid color
+    - ramp: Color gradient (horizontal, vertical, diagonal, radial)
+    - pulse: Pulsing color (fades in/out)
+    - rainbow: Cycling rainbow colors
+    - flash: Quick flash then fade
+    - strobe: Rapid on/off
+    - wave: Horizontal wave pattern
+    - sparkle: Random sparkling pixels
+
+    XML Sections:
+    - <Global>: Server, display, TTS, audio, and MIDI settings
+    - <Syllables>: Text syllables with IDs
+    - <Notes>: Map MIDI notes to syllable IDs
+    - <Effects>: Visual effects with IDs
+    - <EffectNotes>: Map MIDI notes to effect IDs
+-->
+<Mapping>
+    <Global>
+        <!-- FlaschenTaschen server connection -->
+        <Server ip="127.0.0.1" port="1337"/>
+
+        <!-- LED matrix display settings -->
+        <Display
+            width="45"
+            height="35"
+            offsetX="0"
+            offsetY="0"
+            layer="1"
+            flipHorizontal="false"
+            mirrorGlyph="true"
+            colorR="255" colorG="255" colorB="0"
+            bgColorR="0" bgColorG="0" bgColorB="0"
+        />
+
+        <!-- Text-to-speech settings -->
+        <TTS voice="en" rate="175" pitch="50" volume="100"/>
+
+        <!-- Audio output (optional - empty uses default device) -->
+        <Audio deviceId="" bufferMs="20"/>
+
+        <!-- MIDI input (set deviceId to enable, use -l to list devices) -->
+        <Midi deviceId="-1"/>
+    </Global>
+
+    <!-- Syllables for text/speech (mapped to home row A-K = C2-C3) -->
+    <Syllables>
+        <S id="0" text="the"/>
+        <S id="1" text="strato"/>
+        <S id="2" text="jets"/>
+        <S id="3" text="are"/>
+        <S id="4" text="the"/>
+        <S id="5" text="next"/>
+        <S id="6" text="hot"/>
+        <S id="7" text="shit"/>
+    </Syllables>
+
+    <!-- Map home row keys (C2-C3) to syllables -->
+    <Notes>
+        <Note midi="36" syllable_id="0"/>  <!-- A = C2 = "the" -->
+        <Note midi="38" syllable_id="1"/>  <!-- S = D2 = "strato" -->
+        <Note midi="40" syllable_id="2"/>  <!-- D = E2 = "jets" -->
+        <Note midi="41" syllable_id="3"/>  <!-- F = F2 = "are" -->
+        <Note midi="43" syllable_id="4"/>  <!-- G = G2 = "the" -->
+        <Note midi="45" syllable_id="5"/>  <!-- H = A2 = "next" -->
+        <Note midi="47" syllable_id="6"/>  <!-- J = B2 = "hot" -->
+        <Note midi="48" syllable_id="7"/>  <!-- K = C3 = "shit" -->
+    </Notes>
+
+    <!-- Visual effects (triggered by number keys 1-9 = MIDI 49-57) -->
+    <Effects>
+        <!-- Solid color fills -->
+        <E id="0" name="Red" type="solid" r="255" g="0" b="0" duration="1000"/>
+        <E id="1" name="Green" type="solid" r="0" g="255" b="0" duration="1000"/>
+        <E id="2" name="Blue" type="solid" r="0" g="0" b="255" duration="1000"/>
+
+        <!-- Color gradients -->
+        <E id="3" name="Sunset Ramp" type="ramp"
+           r="255" g="100" b="0"
+           r2="128" g2="0" b2="128"
+           direction="horizontal" duration="2000"/>
+        <E id="4" name="Ocean Ramp" type="ramp"
+           r="0" g="100" b="255"
+           r2="0" g2="255" b2="200"
+           direction="vertical" duration="2000"/>
+
+        <!-- Animated effects -->
+        <E id="5" name="Yellow Pulse" type="pulse"
+           r="255" g="255" b="0"
+           duration="3000" period="500" intensity="1.0"/>
+        <E id="6" name="Rainbow" type="rainbow"
+           duration="5000" speed="50"/>
+        <E id="7" name="White Flash" type="flash"
+           r="255" g="255" b="255"
+           duration="500" intensity="1.0"/>
+        <E id="8" name="Red/Blue Strobe" type="strobe"
+           r="255" g="0" b="0"
+           r2="0" g2="0" b2="255"
+           duration="2000" period="100"/>
+        <E id="9" name="Cyan Wave" type="wave"
+           r="0" g="255" b="255"
+           r2="0" g2="50" b2="100"
+           duration="3000" speed="75"/>
+        <E id="10" name="Gold Sparkle" type="sparkle"
+           r="255" g="215" b="0"
+           r2="20" g2="20" b2="0"
+           duration="2000" intensity="0.8"/>
+    </Effects>
+
+    <!-- Map number keys to effects (MIDI 49-57 = C#3-A3) -->
+    <EffectNotes>
+        <EN midi="49" effect_id="0"/>   <!-- 1 = Red -->
+        <EN midi="50" effect_id="1"/>   <!-- 2 = Green -->
+        <EN midi="51" effect_id="2"/>   <!-- 3 = Blue -->
+        <EN midi="52" effect_id="3"/>   <!-- 4 = Sunset Ramp -->
+        <EN midi="53" effect_id="4"/>   <!-- 5 = Ocean Ramp -->
+        <EN midi="54" effect_id="5"/>   <!-- 6 = Yellow Pulse -->
+        <EN midi="55" effect_id="6"/>   <!-- 7 = Rainbow -->
+        <EN midi="56" effect_id="7"/>   <!-- 8 = White Flash -->
+        <EN midi="57" effect_id="8"/>   <!-- 9 = Red/Blue Strobe -->
+        <EN midi="58" effect_id="9"/>   <!-- 10 = Cyan Wave -->
+        <EN midi="59" effect_id="10"/>  <!-- 11 = Gold Sparkle -->
+    </EffectNotes>
+</Mapping>

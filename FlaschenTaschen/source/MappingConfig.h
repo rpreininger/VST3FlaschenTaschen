@@ -84,6 +84,68 @@ struct MidiConfig {
 };
 
 //------------------------------------------------------------------------
+// EffectType - types of visual effects
+//------------------------------------------------------------------------
+enum class EffectType {
+    None = 0,
+    SolidColor,     // Fill with solid color
+    ColorRamp,      // Gradient from color1 to color2
+    Pulse,          // Pulsing color (fades in/out)
+    Rainbow,        // Cycling rainbow colors
+    Flash,          // Quick flash then fade
+    Strobe,         // Rapid on/off
+    Wave,           // Horizontal wave pattern
+    Sparkle         // Random sparkling pixels
+};
+
+//------------------------------------------------------------------------
+// RampDirection - direction for color ramps
+//------------------------------------------------------------------------
+enum class RampDirection {
+    Horizontal = 0,
+    Vertical,
+    DiagonalDown,
+    DiagonalUp,
+    Radial          // From center outward
+};
+
+//------------------------------------------------------------------------
+// Effect - defines a visual effect with parameters
+//------------------------------------------------------------------------
+struct Effect {
+    int id = -1;
+    std::string name;
+    EffectType type = EffectType::None;
+
+    // Colors
+    uint8_t color1R = 255, color1G = 255, color1B = 255;  // Primary color
+    uint8_t color2R = 0, color2G = 0, color2B = 0;        // Secondary color (for ramps, etc.)
+
+    // Timing parameters (in milliseconds)
+    int durationMs = 500;       // Total effect duration
+    int periodMs = 100;         // Period for repeating effects (pulse, strobe)
+
+    // Ramp parameters
+    RampDirection rampDirection = RampDirection::Horizontal;
+
+    // Other parameters
+    float intensity = 1.0f;     // 0.0 - 1.0
+    int speed = 50;             // Effect speed (0-100)
+
+    // Helper to convert effect type from string
+    static EffectType typeFromString(const std::string& str);
+    static RampDirection directionFromString(const std::string& str);
+};
+
+//------------------------------------------------------------------------
+// EffectMapping - maps a MIDI note to an effect
+//------------------------------------------------------------------------
+struct EffectMapping {
+    int midiNote;
+    int effectId;
+};
+
+//------------------------------------------------------------------------
 // MappingConfig - complete configuration from XML
 //------------------------------------------------------------------------
 class MappingConfig {
@@ -105,12 +167,23 @@ public:
     const MidiConfig& getMidiConfig() const { return midiConfig_; }
     const std::vector<Syllable>& getSyllables() const { return syllables_; }
     const std::vector<NoteMapping>& getNoteMappings() const { return noteMappings_; }
+    const std::vector<Effect>& getEffects() const { return effects_; }
+    const std::vector<EffectMapping>& getEffectMappings() const { return effectMappings_; }
 
     // Get syllable text for a given MIDI note (returns empty string if not found)
     std::string getSyllableForNote(int midiNote) const;
 
     // Get syllable by ID
     const Syllable* getSyllableById(int id) const;
+
+    // Get effect for a given MIDI note (returns nullptr if not found)
+    const Effect* getEffectForNote(int midiNote) const;
+
+    // Get effect by ID
+    const Effect* getEffectById(int id) const;
+
+    // Check if a note triggers an effect (vs syllable)
+    bool hasEffectForNote(int midiNote) const;
 
     // Check if configuration is valid
     bool isValid() const { return isValid_; }
@@ -130,12 +203,16 @@ private:
     MidiConfig midiConfig_;
     std::vector<Syllable> syllables_;
     std::vector<NoteMapping> noteMappings_;
+    std::vector<Effect> effects_;
+    std::vector<EffectMapping> effectMappings_;
     std::map<int, int> noteToSyllableMap_;  // MIDI note -> syllable ID
+    std::map<int, int> noteToEffectMap_;    // MIDI note -> effect ID
 
     bool isValid_ = false;
     std::string lastError_;
 
     void buildNoteToSyllableMap();
+    void buildNoteToEffectMap();
     bool parseXml(const std::string& xmlContent);
 };
 
