@@ -363,7 +363,9 @@ int main(int argc, char* argv[]) {
     g_ftClient.setDisplaySize(display.width, display.height);
     g_ftClient.setOffset(display.offsetX, display.offsetY);
     g_ftClient.setLayer(display.layer);
+    g_ftClient.setFlipHorizontal(display.flipHorizontal);
     g_font.setScale(2);  // Double size for visibility
+    g_font.setMirrorGlyph(display.mirrorGlyph);
 
     if (g_ftClient.connect(server.ip, server.port)) {
         std::cout << "    OK - Connected to " << server.ip << ":" << server.port << "\n";

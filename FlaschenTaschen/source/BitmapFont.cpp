@@ -237,7 +237,9 @@ void BitmapFont::renderChar(FlaschenTaschenClient& client, char c, int x, int y,
     for (int row = 0; row < CHAR_HEIGHT; ++row) {
         uint8_t rowData = bitmap[row];
         for (int col = 0; col < CHAR_WIDTH; ++col) {
-            bool pixelOn = (rowData & (1 << col)) != 0;
+            // If mirroring, read bits from the opposite end
+            int bitCol = mirrorGlyph_ ? (CHAR_WIDTH - 1 - col) : col;
+            bool pixelOn = (rowData & (1 << bitCol)) != 0;
             const Color& pixelColor = pixelOn ? color : bgColor;
 
             // Draw scaled pixel

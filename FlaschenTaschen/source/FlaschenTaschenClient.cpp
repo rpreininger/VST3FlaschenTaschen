@@ -122,9 +122,9 @@ void FlaschenTaschenClient::setPixel(int x, int y, const Color& color) {
         return;
     }
 
-    // Horizontal flip to counter mirrored display
-    int flippedX = width_ - 1 - x;
-    int index = (y * width_ + flippedX) * 3;
+    // Apply horizontal flip if enabled (for mirrored displays)
+    int pixelX = flipHorizontal_ ? (width_ - 1 - x) : x;
+    int index = (y * width_ + pixelX) * 3;
     frameBuffer_[index] = color.r;
     frameBuffer_[index + 1] = color.g;
     frameBuffer_[index + 2] = color.b;

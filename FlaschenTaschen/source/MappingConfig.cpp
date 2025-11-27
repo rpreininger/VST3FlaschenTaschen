@@ -140,6 +140,16 @@ bool MappingConfig::parseXml(const std::string& xmlContent) {
             displayConfig_.offsetX = getIntAttribute(displayTags[0], "offsetX", 0);
             displayConfig_.offsetY = getIntAttribute(displayTags[0], "offsetY", 0);
             displayConfig_.layer = getIntAttribute(displayTags[0], "layer", 1);
+            // Parse flipHorizontal - default false, "1" or "true" enables it
+            std::string flipStr = getAttribute(displayTags[0], "flipHorizontal");
+            if (!flipStr.empty()) {
+                displayConfig_.flipHorizontal = (flipStr == "1" || flipStr == "true");
+            }
+            // Parse mirrorGlyph - default true, "0" or "false" disables it
+            std::string mirrorStr = getAttribute(displayTags[0], "mirrorGlyph");
+            if (!mirrorStr.empty()) {
+                displayConfig_.mirrorGlyph = (mirrorStr != "0" && mirrorStr != "false");
+            }
             displayConfig_.colorR = getUint8Attribute(displayTags[0], "colorR", 255);
             displayConfig_.colorG = getUint8Attribute(displayTags[0], "colorG", 255);
             displayConfig_.colorB = getUint8Attribute(displayTags[0], "colorB", 255);

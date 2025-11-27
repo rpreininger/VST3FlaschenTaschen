@@ -44,6 +44,8 @@ struct DisplayConfig {
     int offsetX = 0;
     int offsetY = 0;
     int layer = 1;  // Z-layer (0 = background)
+    bool flipHorizontal = false;  // Flip entire display horizontally
+    bool mirrorGlyph = true;      // Mirror each character/glyph horizontally
 
     // Font/color settings
     uint8_t colorR = 255;

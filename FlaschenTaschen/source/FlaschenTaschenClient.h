@@ -65,6 +65,10 @@ public:
     // Set Z-layer (0 = background, higher = overlay)
     void setLayer(int z);
 
+    // Set horizontal flip (for mirrored displays)
+    void setFlipHorizontal(bool flip) { flipHorizontal_ = flip; }
+    bool getFlipHorizontal() const { return flipHorizontal_; }
+
     // Clear the frame buffer
     void clear(const Color& color = Color::Black());
 
@@ -90,6 +94,7 @@ private:
     int offsetX_ = 0;
     int offsetY_ = 0;
     int layer_ = 0;
+    bool flipHorizontal_ = true;
 
     std::vector<uint8_t> frameBuffer_;  // RGB data
 

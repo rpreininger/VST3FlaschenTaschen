@@ -27,6 +27,10 @@ public:
     void setScale(int scale) { scale_ = (scale > 0) ? scale : 1; }
     int getScale() const { return scale_; }
 
+    // Set horizontal mirror for each glyph (for mirrored displays)
+    void setMirrorGlyph(bool mirror) { mirrorGlyph_ = mirror; }
+    bool getMirrorGlyph() const { return mirrorGlyph_; }
+
     // Get scaled dimensions
     int getScaledCharWidth() const { return CHAR_WIDTH * scale_; }
     int getScaledCharHeight() const { return CHAR_HEIGHT * scale_; }
@@ -56,6 +60,7 @@ public:
 
 private:
     int scale_ = 1;
+    bool mirrorGlyph_ = false;
 
     // Character bitmap lookup
     static int charToIndex(char c);
